@@ -42,9 +42,14 @@ function fetch_and_process_rss() {
     echo "Fetching and processing RSS feeds using Python script..."
     source /opt/venv/bin/activate
     
+    # The process_gemini.py script will return an AI generated snippet of HTML to be added to RSS
     # The process_rss.py script will output the full initial HTML.
+    local daily_content
+    daily_content=$(python3 /crosswords/process_gemini.py)
+
     local html_content
-    html_content=$(python3 /crosswords/process_rss.py "${CBC_RSS_URLS[@]}")
+    # Pass the AI generated content as the first argument to process_rss.py
+    html_content=$(python3 /crosswords/process_rss.py "${daily_content}" "${CBC_RSS_URLS[@]}")
 
     # Write HTML content to a dedicated temporary directory
     local temp_html_file=$(mktemp /crosswords/tmp/cbc-news-XXXXXX.html)

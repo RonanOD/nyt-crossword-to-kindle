@@ -2,3 +2,4 @@ downloads/*
 !downloads/README.md
 cookies.nyt.txt
 .env
+USER_CONTEXT.md

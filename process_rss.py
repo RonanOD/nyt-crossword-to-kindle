@@ -4,9 +4,9 @@ import html
 from datetime import datetime
 import socket
 
-def fetch_and_process_rss(urls):
+def fetch_and_process_rss(daily_content, urls):
     """
-    Fetches RSS feeds, processes them, and returns an HTML string.
+    Fetches RSS feeds, processes them, and returns an HTML string with the provided daily_content.
     """
     # Set a global timeout for all socket operations to prevent indefinite hanging.
     socket.setdefaulttimeout(30)
@@ -16,6 +16,10 @@ def fetch_and_process_rss(urls):
 
     date_str = datetime.now().strftime('%Y-%m-%d')
     html_content = f"<html><head><meta charset=\"UTF-8\"><title>CBC News Headlines</title></head><body><h1>CBC News Headlines - {date_str}</h1>"
+    
+    # Insert the daily content snippet
+    if daily_content:
+        html_content += daily_content
 
     for url in urls:
         try:
@@ -45,10 +49,17 @@ def fetch_and_process_rss(urls):
     return html_content
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
+    if len(sys.argv) > 2:
+        # The first argument is the daily content, the rest are RSS URLs
+        daily_content_snippet = sys.argv[1]
+        rss_urls = sys.argv[2:]
+        processed_html = fetch_and_process_rss(daily_content_snippet, rss_urls)
+        print(processed_html)
+    elif len(sys.argv) > 1:
+        # Fallback for when no daily content is provided
         rss_urls = sys.argv[1:]
-        processed_html = fetch_and_process_rss(rss_urls)
+        processed_html = fetch_and_process_rss("", rss_urls)
         print(processed_html)
     else:
-        print("Usage: python process_rss.py <url1> <url2> ...", file=sys.stderr)
+        print("Usage: python process_rss.py [daily_content] <url1> <url2> ...", file=sys.stderr)
         sys.exit(1)

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Rock of Cashel | Echoes of Stone</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=Lora:ital,wght@0,400;0,700;1,400&display=swap"
+        rel="stylesheet">
+    <style>
+        /* --- CSS Styles defining the haunting atmosphere --- */
+        :root {
+            --color-bg-main: #1a1a1a;
+            /* Deep charcoal black */
+            --color-bg-secondary: #242424;
+            /* Slightly lighter dark */
+            --color-text-main: #c0c0c0;
+            /* Muted silver gray for readability */
+            --color-accent: #8a7a5b;
+            /* Tarnished gold/bronze for ancient feel */
+        }
+
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Lora', serif;
+            background-color: var(--color-bg-main);
+            color: var(--color-text-main);
+            line-height: 1.8;
+            scroll-behavior: smooth;
+        }
+
+        /* A subtle vignette effect over the whole site for a moody feel */
+        body::after {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            box-shadow: inset 0px 0px 150px rgba(0, 0, 0, 0.7);
+            pointer-events: none;
+            z-index: 99;
+        }
+
+        h1,
+        h2,
+        h3 {
+            font-family: 'Cinzel Decorative', cursive;
+            font-weight: 400;
+            color: var(--color-accent);
+            letter-spacing: 1px;
+        }
+
+        /* --- Hero Section (Top Image) --- */
+        .hero {
+            /* Using a placeholder image from Unsplash. Replace this URL with your own local image if desired. */
+            background-image: linear-gradient(rgba(0, 0, 0, 0.5), rgba(26, 26, 26, 1)), url('https://images.unsplash.com/photo-1564406590389-2948b4fb7175?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1920&q=80');
+            height: 85vh;
+            background-attachment: fixed;
+            /* Parallax effect */
+            background-position: center;
+            background-size: cover;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 0 20px;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            margin-bottom: 0.5rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            opacity: 0;
+            animation: slowFadeIn 3s forwards 0.5s;
+            /* Fade in animation */
+        }
+
+        .hero p.subtitle {
+            font-size: 1.2rem;
+            font-style: italic;
+            opacity: 0;
+            animation: slowFadeIn 3s forwards 1.5s;
+        }
+
+        /* --- Music Player Section --- */
+        .music-container {
+            background-color: var(--color-bg-secondary);
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid rgba(138, 122, 91, 0.2);
+            border-bottom: 1px solid rgba(138, 122, 91, 0.2);
+        }
+
+        .music-label {
+            display: block;
+            margin-bottom: 15px;
+            font-family: 'Cinzel Decorative', cursive;
+            color: var(--color-accent);
+        }
+
+        audio {
+            width: 80%;
+            max-width: 500px;
+            outline: none;
+            /* Customizing audio players is hard, but we can blend it in slightly */
+            filter: sepia(20%) contrast(90%) brightness(80%);
+        }
+
+        /* --- Main Content Section --- */
+        .content-section {
+            max-width: 800px;
+            margin: 60px auto;
+            padding: 20px 40px;
+            text-align: justify;
+        }
+
+        .content-section p {
+            margin-bottom: 25px;
+        }
+
+        .drop-cap {
+            float: left;
+            font-family: 'Cinzel Decorative', cursive;
+            font-size: 4rem;
+            line-height: 0.8;
+            margin-right: 10px;
+            margin-top: 5px;
+            color: var(--color-accent);
+        }
+
+        /* --- Footer --- */
+        footer {
+            text-align: center;
+            padding: 40px 20px;
+            font-size: 0.9rem;
+            color: #666;
+            background-color: #111;
+        }
+
+        /* --- Animations --- */
+        @keyframes slowFadeIn {
+            to {
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <header class="hero">
+        <h1>The Rock of Cashel</h1>
+        <p class="subtitle">A fortress of kings, a sanctuary of stone.</p>
+    </header>
+
+    <section class="music-container">
+        <span class="music-label">Listen: "The Stone Crown of Cashel" (Slow Air)</span>
+        <audio controls>
+            <source src="TheStoneCrownOfCashel.midi" type="audio/midi">
+            <source src="TheStoneCrownOfCashel.midi" type="audio/x-midi">
+            <p>Your browser does not support the audio element or MIDI playback.</p>
+        </audio>
+    </section>
+
+    <article class="content-section">
+        <h2>Echoes of Munster</h2>
+        <p>
+            <span class="drop-cap">R</span>ising dramatically from the Golden Vale of Tipperary, the Rock of Cashel
+            stands not merely as a collection of buildings, but as a testament to Ireland’s layered and often turbulent
+            history. For a thousand years, this limestone outcrop has watched over the plains, a silent sentinel against
+            the march of time.
+        </p>
+        <p>
+            Long before stone was laid upon stone, this was the seat of the High Kings of Munster. It was here,
+            according to legend, that St. Patrick himself baptized King Aengus in the 5th century, accidentally piercing
+            the king's foot with his crozier during the ceremony—a pain the king bore stoically, believing it part of
+            the ritual.
+        </p>
+        <p>
+            In 1101, the Rock was gifted to the Church, transforming a fortress of warlords into a center of
+            ecclesiastical power. The structures that remain—the austere Round Tower, the complex beauty of Cormac’s
+            Chapel, and the haunting shell of the Gothic Cathedral—are survivors of siege, weather, and the Cromwellian
+            conquests.
+        </p>
+        <p>
+            Today, the winds whip around the roofless cathedral. The silence in the nave is profound, broken only by the
+            call of jackdaws. It is a place where the veil between the past and present feels thin, a landscape steeped
+            in memory and melancholic grandeur.
+        </p>
+    </article>
+
+    <footer>
+        <p>Music generated in the style of a traditional Irish slow air. Site design for atmospheric contemplation.</p>
+    </footer>
+
+</body>
+
+</html>

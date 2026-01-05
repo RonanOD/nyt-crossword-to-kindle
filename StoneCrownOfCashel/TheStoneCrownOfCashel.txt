@@ -1,0 +1,78 @@
+\version "2.24.1"
+
+\header {
+  title = "The Stone Crown of Cashel"
+  subtitle = "Slow Air"
+  composer = "Traditional Style (Original Composition)"
+  poet = "Lento, con espressione, rubato"
+  tagline = ##f
+}
+
+melody = \relative c' {
+  \key g \major % D Mixolydian mode utilizes the G major key signature
+  \time 3/4
+
+  % --- Section A ---
+  \repeat volta 2 {
+    % Measure 1
+    d2.~(\mf \turn d4 |
+    % Measure 2
+    fis4 g a) |
+    % Measure 3
+    b2.( |
+    % Measure 4
+    b4 a g) |
+    % Measure 5
+    fis2( e4) |
+    % Measure 6
+    d4.(\grace {e16 d} c8 b4) |
+    % Measure 7
+    a2. |
+    % Measure 8 - 1st Ending
+    \alternative {
+      { \grace {g'16 a} b2( a4) | }
+      % Measure 9 - 2nd Ending
+      { d,2. \laissezVibrer | }
+    }
+  }
+
+  \break
+
+  % --- Section B ---
+  \repeat volta 2 {
+    % Measure 10 (High part representing the towers/wind)
+    d'2.(\f |
+    % Measure 11
+    c4 b a) |
+    % Measure 12
+    b2.~(\turn b4 |
+    % Measure 13
+    a2 g4) |
+    % Measure 14
+    fis4( g a) |
+    % Measure 15
+    e2( d4) |
+    % Measure 16
+    d2.~(\mp |
+    % Measure 17
+    d2.) \fine |
+  }
+}
+
+\score {
+  \new Staff \with {
+    instrumentName = \markup { \center-column { "Fiddle/" "Flute" } }
+  } {
+    \melody
+  }
+  \layout {
+    indent = 2.0\cm
+    \context {
+      \Score
+      \override SpacingSpanner.base-shortest-duration = #(ly:make-moment 1/16)
+    }
+  }
+  \midi {
+    \tempo 4 = 60
+  }
+}

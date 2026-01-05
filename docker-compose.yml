@@ -13,3 +13,7 @@ services:
       - ${NYT_COOKIES_PATH}:/crosswords/cookies.nyt.txt
       # To allow for changing .env without restarting the container
       - ./.env:/crosswords/.env
+      - ./token.json:/crosswords/token.json
+      - ./settings.json:/crosswords/settings.json
+      - ./process_email.py:/crosswords/process_email.py
+      - ./process_gemini.py:/crosswords/process_gemini.py

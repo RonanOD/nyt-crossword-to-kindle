@@ -3,3 +3,7 @@ downloads/*
 cookies.nyt.txt
 .env
 USER_CONTEXT.md
+settings.json
+token.json
+__pycache__/
+.DS_Store

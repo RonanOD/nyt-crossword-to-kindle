@@ -14,6 +14,9 @@ import os.path
 import datetime
 import base64
 
+from google.auth.transport.requests import Request
+from google.auth.exceptions import RefreshError
+
 # If modifying these scopes, delete the file token.json.
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 
@@ -25,6 +28,12 @@ def get_gmail_service():
         # We expect token.json to exist in the container/environment
         raise FileNotFoundError("token.json not found. Please run setup_gmail_auth.py locally first.")
     
+    if creds and creds.expired and creds.refresh_token:
+        try:
+            creds.refresh(Request())
+        except RefreshError:
+             raise ValueError("Token expired and could not be refreshed. Please run setup_gmail_auth.py to re-authenticate.")
+
     return build('gmail', 'v1', credentials=creds)
 
 def fetch_recent_emails(hours=24):

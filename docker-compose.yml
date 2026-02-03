@@ -17,3 +17,4 @@ services:
       - ./settings.json:/crosswords/settings.json
       - ./process_email.py:/crosswords/process_email.py
       - ./process_gemini.py:/crosswords/process_gemini.py
+      - ./process_ha.py:/crosswords/process_ha.py

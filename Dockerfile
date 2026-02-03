@@ -24,6 +24,7 @@ COPY ./process_html.py process_html.py
 COPY ./process_rss.py process_rss.py
 COPY ./process_email.py process_email.py
 COPY ./process_gemini.py process_gemini.py
+COPY ./process_ha.py process_ha.py
 COPY ./USER_CONTEXT.md USER_CONTEXT.md
 COPY ./main.sh main.sh
 

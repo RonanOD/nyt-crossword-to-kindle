@@ -42,10 +42,10 @@ function fetch_and_process_rss() {
     echo "Fetching and processing RSS feeds using Python script..."
     source /opt/venv/bin/activate
     
-    # The process_gemini.py script will return an AI generated snippet of HTML to be added to RSS
+    # The process_ha.py script will return an AI generated snippet of HTML based on Home Assistant state
     # The process_rss.py script will output the full initial HTML.
     local daily_content
-    daily_content=$(python3 /crosswords/process_gemini.py)
+    daily_content=$(python3 /crosswords/process_ha.py)
 
     local html_content
     # Pass the AI generated content as the first argument to process_rss.py

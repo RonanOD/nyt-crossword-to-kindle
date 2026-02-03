@@ -22,9 +22,7 @@ COPY ./download-crossword.sh download-crossword.sh
 COPY ./download-cbc-news.sh download-cbc-news.sh
 COPY ./process_html.py process_html.py
 COPY ./process_rss.py process_rss.py
-COPY ./process_email.py process_email.py
-COPY ./process_gemini.py process_gemini.py
-COPY ./USER_CONTEXT.md USER_CONTEXT.md
+COPY ./process_ha.py process_ha.py
 COPY ./main.sh main.sh
 
 ENTRYPOINT ["./main.sh"]

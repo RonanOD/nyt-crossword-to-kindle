@@ -22,8 +22,8 @@ function verify_env_vars() {
         exit 1
     fi
 
-    if [ -z "${KINDLE_EMAIL_ADDRESS}" ]; then
-        echo "Kindle email address not set in environment variable KINDLE_EMAIL_ADDRESS. Exiting."
+    if [ -z "${KINDLE_EMAIL_ADDRESS}" ] && { [ -z "${TELEGRAM_BOT_TOKEN}" ] || [ -z "${TELEGRAM_CHAT_ID}" ]; }; then
+        echo "Neither Kindle email address nor Telegram details are set. Nothing to do. Exiting."
         exit 1
     fi
 
@@ -89,6 +89,11 @@ function fetch_and_process_rss() {
 function send_to_kindle() {
     local pdf_path="${1}"
     local pdf_name=$(basename "${pdf_path}")
+
+    if [ -z "${KINDLE_EMAIL_ADDRESS}" ]; then
+        echo "Kindle email not set. Skipping Kindle send."
+        return
+    fi
 
     if [ -z "${DISABLE_SEND}" ]; then
         echo "Sending file ${pdf_name} to kindle email address ${KINDLE_EMAIL_ADDRESS}"

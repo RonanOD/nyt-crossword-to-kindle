@@ -99,6 +99,32 @@ function send_to_kindle() {
     fi
 }
 
+function send_to_telegram() {
+    local pdf_path="${1}"
+    local pdf_name=$(basename "${pdf_path}")
+
+    if [ -z "${TELEGRAM_BOT_TOKEN}" ] || [ -z "${TELEGRAM_CHAT_ID}" ]; then
+        echo "Telegram details not set. Skipping Telegram send."
+        return
+    fi
+
+    if [ -z "${DISABLE_SEND}" ]; then
+        echo "Sending file ${pdf_name} to Telegram chat ${TELEGRAM_CHAT_ID}"
+        response=$(curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+            -F chat_id="${TELEGRAM_CHAT_ID}" \
+            -F document=@"${pdf_path}" \
+            -F caption="Here is your daily news summary 📰")
+        
+        if echo "${response}" | grep -q '"ok":true'; then
+            echo "Telegram send successful!"
+        else
+            echo "Telegram send failed: ${response}"
+        fi
+    else
+        echo "Sending detected as disabled. Will not send file ${pdf_name} to Telegram."
+    fi
+}
+
 function parse_flags() {
     while [ $# -gt 0 ]; do
         case $1 in
@@ -119,6 +145,7 @@ verify_env_vars
 parse_flags "$@"
 fetch_and_process_rss
 send_to_kindle "${OUTPUT_PDF_PATH}"
+send_to_telegram "${OUTPUT_PDF_PATH}"
 
 echo -e "-----------------CBC NEWS SENDER FINISHED-----------------
 "

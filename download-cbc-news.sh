@@ -113,20 +113,16 @@ function send_to_telegram() {
         return
     fi
 
-    if [ -z "${DISABLE_SEND}" ]; then
-        echo "Sending file ${pdf_name} to Telegram chat ${TELEGRAM_CHAT_ID}"
-        response=$(curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
-            -F chat_id="${TELEGRAM_CHAT_ID}" \
-            -F document=@"${pdf_path}" \
-            -F caption="Here is your daily news summary 📰")
-        
-        if echo "${response}" | grep -q '"ok":true'; then
-            echo "Telegram send successful!"
-        else
-            echo "Telegram send failed: ${response}"
-        fi
+    echo "Sending file ${pdf_name} to Telegram chat ${TELEGRAM_CHAT_ID}"
+    response=$(curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+        -F chat_id="${TELEGRAM_CHAT_ID}" \
+        -F document=@"${pdf_path}" \
+        -F caption="Here is your daily news summary 📰")
+    
+    if echo "${response}" | grep -q '"ok":true'; then
+        echo "Telegram send successful!"
     else
-        echo "Sending detected as disabled. Will not send file ${pdf_name} to Telegram."
+        echo "Telegram send failed: ${response}"
     fi
 }
 

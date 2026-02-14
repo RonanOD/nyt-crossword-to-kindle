@@ -21,6 +21,7 @@ Starting as a basic, thrown together project for my wife, I wanted to make this 
   - [I want to download a specific crossword](#i-want-to-download-a-specific-crossword)
   - [I want to download a lot of crosswords at once](#i-want-to-download-a-lot-of-crosswords-at-once)
   - [I want my daily crossword sent at a specific time each day](#i-want-my-daily-crossword-sent-at-a-specific-time-each-day)
+  - [Daily News & Home Assistant Summary](#daily-news--home-assistant-summary)
 - [Customization Examples](#customization-examples)
 - [Troubleshooting](#troubleshooting)
   - [Invalid NYT Cookies](#invalid-nyt-cookies)
@@ -253,6 +254,43 @@ One step needed: **Change your `.env`.**
       CROSSWORD_DAILY_SEND_TIME="17:00"
       ```
     * Save the file.
+
+### Daily News & Home Assistant Summary
+This tool now includes a feature to generate a daily PDF containing CBC News headlines and a summary of your Home Assistant status (using Google Gemini).
+
+#### Enabling the Daily News PDF
+The news PDF is generated automatically alongside the crossword. It scrapes top headlines from CBC News RSS feeds.
+
+#### Enabling the Home Assistant Summary
+To include a personalized "Good Morning" summary from your Home Assistant (weather, calendar, battery levels, etc.), you need to provide a Google Gemini API key and your Home Assistant details.
+
+1.  **Get a Gemini API Key:** [Get an API key from Google AI Studio](https://aistudio.google.com/app/apikey).
+2.  **Get a Long-Lived Access Token from Home Assistant:**
+    *   Go to your User Profile (bottom left in HA) -> Security -> Long-Lived Access Tokens.
+    *   Create a token named "News Summary".
+3.  **Update your `.env` file:**
+    Add the following lines to the bottom of your `.env` file:
+    ```bash
+    # API KEY for Google Gemini
+    GEMINI_API_KEY="your_gemini_key_here"
+
+    # Home Assistant Token & URL
+    HA_TOKEN="your_long_lived_access_token_here"
+    HA_URL="http://192.168.1.100:8123" # Replace with your local HA URL
+    ```
+
+#### Sending via Telegram
+In addition to email (Kindle), you can have the news PDF sent to a Telegram chat.
+
+1.  **Create a Telegram Bot:** Talk to [@BotFather](https://t.me/botfather) on Telegram to create a new bot and get a `TELEGRAM_BOT_TOKEN`.
+2.  **Get your Chat ID:** Message your new bot (or add it to a group) and use a tool like `@userinfobot` or check the API updates to find your `TELEGRAM_CHAT_ID`.
+3.  **Update your `.env` file:**
+    ```bash
+    # Telegram Integration
+    TELEGRAM_BOT_TOKEN="your_bot_token_here"
+    TELEGRAM_CHAT_ID="your_chat_id_here"
+    ```
+    *   If `KINDLE_EMAIL_ADDRESS` is omitted/blank but Telegram details are provided, the script will **only** send to Telegram (useful for vacations!).
 
 ## Customization Examples
 The following are `CROSSWORD_COMMAND_LINE_ARGUMENTS` examples:

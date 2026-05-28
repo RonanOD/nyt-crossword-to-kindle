@@ -28,7 +28,6 @@ LOW_BATTERY_THRESHOLD = 20
 FORECAST_HOURS = 12
 WEATHER_ENTITY = 'weather.forecast_home'
 WASTE_CALENDAR = 'calendar.halifax_ns'
-SHOPPING_LIST = 'todo.shopping_list'
 
 
 class HA:
@@ -80,20 +79,6 @@ class HA:
             .get('forecast', [])
         )
 
-    def todo_items(self, entity_id, status='needs_action'):
-        result = self._request(
-            'POST',
-            '/api/services/todo/get_items',
-            body={'entity_id': entity_id, 'status': status},
-            query={'return_response': 'true'},
-        )
-        return (
-            result.get('service_response', {})
-            .get(entity_id, {})
-            .get('items', [])
-        )
-
-
 def section(label):
     """Wrap a section renderer so a failure logs and returns ''."""
     def wrap(fn):
@@ -137,6 +122,20 @@ def fmt_num(value, suffix=''):
         return f'{float(value):g}{suffix}'
     except (TypeError, ValueError):
         return f'{value}{suffix}'
+
+
+def iter_batteries(states):
+    """Yield (level, name, entity_id) for every numeric battery-percentage sensor."""
+    for s in states:
+        attrs = s.get('attributes', {})
+        if attrs.get('device_class') != 'battery':
+            continue
+        try:
+            level = float(s['state'])
+        except (KeyError, TypeError, ValueError):
+            continue
+        name = attrs.get('friendly_name', s['entity_id']).removesuffix(' Battery')
+        yield level, name, s['entity_id']
 
 
 @section('header')
@@ -282,20 +281,11 @@ def render_anomalies(ha):
     if open_devices:
         bullets.append(f'<li>Open: {", ".join(open_devices)}</li>')
 
-    low = []
-    for s in states:
-        eid = s.get('entity_id', '')
-        if not (eid.startswith('sensor.') and eid.endswith('_battery')):
-            continue
-        try:
-            level = float(s['state'])
-        except (KeyError, TypeError, ValueError):
-            continue
-        if level <= LOW_BATTERY_THRESHOLD:
-            name = s.get('attributes', {}).get('friendly_name', eid).removesuffix(' Battery')
-            low.append((level, name))
+    low = sorted(
+        (level, name) for level, name, _ in iter_batteries(states)
+        if level <= LOW_BATTERY_THRESHOLD
+    )
     if low:
-        low.sort()
         rendered = ', '.join(f'{n} ({l:.0f}%)' for l, n in low[:6])
         bullets.append(f'<li>Low battery: {rendered}</li>')
 
@@ -429,17 +419,24 @@ def render_climate_table(ha):
     )
 
 
-@section('shopping')
-def render_shopping_list(ha):
-    items = ha.todo_items(SHOPPING_LIST, status='needs_action')
+@section('batteries')
+def render_batteries(ha):
+    items = sorted(iter_batteries(ha.states()))
     if not items:
         return ''
-    bullets = ''.join(f'<li>{i.get("summary", "")}</li>' for i in items)
+    rows = []
+    for level, name, _ in items:
+        cell = f'<strong>{level:.0f}%</strong>' if level <= LOW_BATTERY_THRESHOLD else f'{level:.0f}%'
+        rows.append(
+            f'<tr><td>{name}</td>'
+            f'<td style="text-align: right; padding-left: 12px;">{cell}</td></tr>'
+        )
     return (
         '<div style="margin: 0 0 10px 0;">'
-        '<h3 style="margin: 0 0 4px 0;">Shopping list</h3>'
-        f'<ul style="margin: 0; padding-left: 20px;">{bullets}</ul>'
-        '</div>'
+        '<h3 style="margin: 0 0 4px 0;">Batteries</h3>'
+        '<table style="border-collapse: collapse; font-size: 13px;">'
+        f'<tbody>{"".join(rows)}</tbody>'
+        '</table></div>'
     )
 
 
@@ -472,7 +469,7 @@ def main():
         render_anomalies(ha),
         render_today_calendar(ha, tz),
         render_climate_table(ha),
-        render_shopping_list(ha),
+        render_batteries(ha),
     ]
 
     body = '\n'.join(s for s in sections if s)

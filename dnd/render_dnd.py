@@ -1,0 +1,347 @@
+#!/usr/bin/env python3
+"""Render the daily solo-D&D workbook page as a full HTML document on stdout.
+
+Deterministic: reads campaign.json (immutable) + state.json (mutable) and lays
+out a single Kindle-Scribe page. No AI, no network. Mirrors process_ha.py: each
+section is wrapped so a failure logs to stderr and renders empty rather than
+killing the page. weasyprint (driven by download-dnd.sh) turns the stdout HTML
+into the PDF.
+
+Layout (top to bottom):
+  - Header     : campaign, turn, character HP/AC line
+  - Narrative  : current room description + echo-back of last interpreted move
+  - Map        : fog-of-war SVG (discovered solid, frontier dashed "?")
+  - Encounter  : SVG monster token + stat box for each living monster
+  - Notes      : grid-lined freeform zone with exit + action checkboxes
+"""
+
+import html
+import json
+import os
+import sys
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+CELL = 90          # map grid cell size (px in the SVG viewBox)
+GAP = 34           # gap between cells
+
+
+def section(label):
+    """Wrap a section renderer so a failure logs and returns ''."""
+    def wrap(fn):
+        def inner(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except Exception as e:  # noqa: BLE001 - fail-soft by design
+                print(f'[dnd-section:{label}] {type(e).__name__}: {e}', file=sys.stderr)
+                return ''
+        return inner
+    return wrap
+
+
+def load_json(name, env_override=None):
+    path = os.environ.get(env_override) if env_override else None
+    if not path:
+        path = os.path.join(SCRIPT_DIR, name)
+    with open(path, encoding='utf-8') as f:
+        return json.load(f)
+
+
+def esc(value):
+    return html.escape(str(value))
+
+
+def living_monsters(node, defeated):
+    """Monsters in a node that have not been recorded as defeated."""
+    defeated = set(defeated or [])
+    return [m for m in node.get('monsters', []) if m.get('id') not in defeated]
+
+
+# --- SVG monster tokens (simple line-art silhouettes, no external assets) -----
+
+def _token_svg(name):
+    """Return a 60x60 inline SVG silhouette keyed loosely off the monster name."""
+    n = name.lower()
+    stroke = 'stroke="black" stroke-width="2.5" fill="none"'
+    if 'rat' in n:
+        body = (
+            f'<ellipse cx="30" cy="36" rx="18" ry="11" {stroke}/>'
+            f'<circle cx="46" cy="30" r="7" {stroke}/>'
+            f'<path d="M12 38 q-9 4 -7 12" {stroke}/>'  # tail
+            f'<circle cx="48" cy="28" r="1.5" fill="black"/>'
+        )
+    elif 'goblin' in n:
+        body = (
+            f'<circle cx="30" cy="22" r="11" {stroke}/>'
+            f'<path d="M19 22 L11 14 M41 22 L49 14" {stroke}/>'  # ears
+            f'<path d="M22 33 L22 50 M38 33 L38 50 M22 50 L38 50" {stroke}/>'
+            f'<circle cx="26" cy="22" r="1.5" fill="black"/>'
+            f'<circle cx="34" cy="22" r="1.5" fill="black"/>'
+        )
+    elif 'blight' in n or 'twig' in n:
+        body = (
+            f'<path d="M30 52 L30 18" {stroke}/>'
+            f'<path d="M30 30 L18 18 M30 34 L44 22 M30 24 L22 12 M30 26 L40 14" {stroke}/>'
+        )
+    else:
+        body = (
+            f'<circle cx="30" cy="30" r="18" {stroke}/>'
+            f'<text x="30" y="36" text-anchor="middle" font-family="serif" '
+            f'font-size="20" fill="black">{esc(name[:1].upper())}</text>'
+        )
+    return (
+        f'<svg width="56" height="56" viewBox="0 0 60 60" '
+        f'xmlns="http://www.w3.org/2000/svg">{body}</svg>'
+    )
+
+
+# --- Sections -----------------------------------------------------------------
+
+@section('header')
+def render_header(campaign, state):
+    ch = state.get('character', {})
+    gs = state.get('game_state', {})
+    name = esc(ch.get('name', 'Hero'))
+    klass = esc(ch.get('class', ''))
+    level = esc(ch.get('level', 1))
+    hp = f"{ch.get('current_hp', '?')}/{ch.get('max_hp', '?')}"
+    ac = esc(ch.get('ac', '?'))
+    turn = esc(gs.get('turn_count', 0))
+    return (
+        f'<div class="hdr">'
+        f'<div class="title">{esc(campaign.get("campaign_name", "Solo Campaign"))}</div>'
+        f'<div class="stats">{name} &middot; {klass} {level} &middot; '
+        f'HP {esc(hp)} &middot; AC {ac} &middot; Turn {turn}</div>'
+        f'</div>'
+    )
+
+
+@section('narrative')
+def render_narrative(campaign, state):
+    gs = state.get('game_state', {})
+    node = campaign['nodes'][gs['current_node']]
+    log = state.get('ingestion', {}).get('turn_log', [])
+
+    echo = ''
+    if log:
+        last = log[-1]
+        read = esc(last.get('summary', ''))
+        echo = (
+            '<div class="echo">'
+            '<strong>Last move, as I read it:</strong> '
+            f'{read} '
+            '<span class="echo-q">&nbsp;&#9744; &times; misread &mdash; correct in Notes</span>'
+            '</div>'
+        )
+    else:
+        echo = (
+            '<div class="echo"><strong>New campaign.</strong> '
+            'Make your first move and email the marked-up page back.</div>'
+        )
+
+    return (
+        '<div class="narr">'
+        f'<h2>{esc(node.get("title", ""))}</h2>'
+        f'<p>{esc(node.get("description", ""))}</p>'
+        f'{echo}'
+        '</div>'
+    )
+
+
+@section('map')
+def render_map(campaign, state):
+    gs = state.get('game_state', {})
+    nodes = campaign['nodes']
+    discovered = set(gs.get('discovered_nodes', []))
+    current = gs.get('current_node')
+
+    # Frontier = undiscovered nodes reachable from a discovered node.
+    frontier = set()
+    for nid in discovered:
+        for dest in nodes.get(nid, {}).get('exits', {}).values():
+            if dest in nodes and dest not in discovered:
+                frontier.add(dest)
+
+    visible = discovered | frontier
+    if not visible:
+        return ''
+
+    def cx(node):
+        return GAP + node['x'] * (CELL + GAP) + CELL / 2
+
+    def cy(node):
+        return GAP + node['y'] * (CELL + GAP) + CELL / 2
+
+    # Edges between two discovered nodes.
+    edges = []
+    drawn = set()
+    for nid in discovered:
+        n = nodes[nid]
+        for dest in n.get('exits', {}).values():
+            if dest in discovered and (dest, nid) not in drawn:
+                drawn.add((nid, dest))
+                edges.append(
+                    f'<line x1="{cx(n):.0f}" y1="{cy(n):.0f}" '
+                    f'x2="{cx(nodes[dest]):.0f}" y2="{cy(nodes[dest]):.0f}" '
+                    f'stroke="#999" stroke-width="2"/>'
+                )
+
+    cells = []
+    for nid in visible:
+        n = nodes[nid]
+        x = GAP + n['x'] * (CELL + GAP)
+        y = GAP + n['y'] * (CELL + GAP)
+        if nid in discovered:
+            border = 'black'
+            sw = 6 if nid == current else 2
+            label = esc(n.get('title', '').replace('The ', ''))
+            here = ('<text x="%d" y="%d" text-anchor="middle" font-family="serif" '
+                    'font-size="13" fill="black">YOU</text>' % (x + CELL / 2, y + CELL - 10)
+                    ) if nid == current else ''
+            cells.append(
+                f'<rect x="{x}" y="{y}" width="{CELL}" height="{CELL}" rx="6" '
+                f'fill="#fff" stroke="{border}" stroke-width="{sw}"/>'
+                f'<foreignObject x="{x}" y="{y + 8}" width="{CELL}" height="{CELL - 20}">'
+                f'<div xmlns="http://www.w3.org/1999/xhtml" '
+                f'style="font:600 12px serif;text-align:center;padding:0 4px;">{label}</div>'
+                f'</foreignObject>{here}'
+            )
+        else:
+            cells.append(
+                f'<rect x="{x}" y="{y}" width="{CELL}" height="{CELL}" rx="6" '
+                f'fill="#f4f4f4" stroke="#999" stroke-width="2" stroke-dasharray="6 5"/>'
+                f'<text x="{x + CELL / 2}" y="{y + CELL / 2 + 9}" text-anchor="middle" '
+                f'font-family="serif" font-size="30" fill="#999">?</text>'
+            )
+
+    # Crop the viewBox to the bounding box of visible cells (+ padding) so the
+    # early game doesn't render a near-empty 5x5 grid.
+    xs = [nodes[n]['x'] for n in visible]
+    ys = [nodes[n]['y'] for n in visible]
+    pad = GAP
+    vb_x = GAP + min(xs) * (CELL + GAP) - pad
+    vb_y = GAP + min(ys) * (CELL + GAP) - pad
+    vb_w = (max(xs) - min(xs)) * (CELL + GAP) + CELL + 2 * pad
+    vb_h = (max(ys) - min(ys)) * (CELL + GAP) + CELL + 2 * pad
+
+    return (
+        '<div class="map"><h3>Map</h3>'
+        f'<svg width="100%" viewBox="{vb_x:.0f} {vb_y:.0f} {vb_w:.0f} {vb_h:.0f}" '
+        f'preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">'
+        f'{"".join(edges)}{"".join(cells)}</svg></div>'
+    )
+
+
+@section('encounter')
+def render_encounter(campaign, state):
+    gs = state.get('game_state', {})
+    node = campaign['nodes'][gs['current_node']]
+    alive = living_monsters(node, gs.get('defeated_monsters'))
+    if not alive:
+        return (
+            '<div class="enc"><h3>Encounter</h3>'
+            '<p class="clear">No enemies here. Choose an exit.</p></div>'
+        )
+
+    boxes = []
+    for m in alive:
+        boxes.append(
+            '<div class="mon">'
+            f'<div class="tok">{_token_svg(m.get("name", "?"))}</div>'
+            '<div class="mstat">'
+            f'<div class="mname">{esc(m.get("name", "?"))}</div>'
+            f'<div class="mline">AC <strong>{esc(m.get("ac", "?"))}</strong>'
+            f' &middot; HP <strong>{esc(m.get("hp", "?"))}</strong></div>'
+            f'<div class="mline">{esc(m.get("attack", ""))}</div>'
+            '<div class="hpboxes">HP: &#9744;&#9744;&#9744;&#9744;&#9744;'
+            '&#9744;&#9744;&#9744;&#9744;&#9744;</div>'
+            '</div></div>'
+        )
+    return f'<div class="enc"><h3>Encounter</h3>{"".join(boxes)}</div>'
+
+
+@section('notes')
+def render_notes(campaign, state):
+    gs = state.get('game_state', {})
+    node = campaign['nodes'][gs['current_node']]
+    exits = node.get('exits', {})
+
+    exit_boxes = ''.join(
+        f'<label>&#9744; Go {esc(direction)}</label>'
+        for direction in exits
+    )
+    action_boxes = (
+        '<label>&#9744; Attack</label>'
+        '<label>&#9744; Search</label>'
+        '<label>&#9744; Drink potion</label>'
+        '<label>&#9744; &times; misread last move</label>'
+    )
+    return (
+        '<div class="notes"><h3>Your Move</h3>'
+        f'<div class="choices">{exit_boxes}{action_boxes}</div>'
+        '<div class="rolls">Dice &mdash; to hit: ____  damage: ____  '
+        'dmg taken: ____</div>'
+        '<div class="pad"></div>'
+        '</div>'
+    )
+
+
+CSS = """
+@page { size: 156mm 208mm; margin: 9mm; }
+* { box-sizing: border-box; }
+body { font-family: 'DejaVu Serif', serif; color: #000; margin: 0; }
+.hdr { border-bottom: 2px solid #000; padding-bottom: 4px; margin-bottom: 6px; }
+.hdr .title { font-size: 17px; font-weight: 700; }
+.hdr .stats { font-size: 12px; color: #333; }
+h2 { font-size: 16px; margin: 4px 0; }
+h3 { font-size: 13px; margin: 4px 0; text-transform: uppercase; letter-spacing: 1px; }
+.narr p { font-size: 13px; line-height: 1.35; margin: 2px 0 6px 0; }
+.echo { font-size: 12px; border: 1px solid #888; border-radius: 4px;
+        padding: 5px 7px; background: #f7f7f7; }
+.echo-q { color: #444; }
+.map { text-align: center; margin: 6px 0; }
+.map svg { max-height: 230px; }
+.lower { display: table; width: 100%; table-layout: fixed; margin-top: 6px; }
+.enc, .notes { display: table-cell; vertical-align: top; width: 50%; padding: 0 6px; }
+.enc { border-right: 1px dashed #aaa; }
+.mon { display: flex; align-items: center; gap: 8px; border: 1px solid #000;
+       border-radius: 5px; padding: 6px; margin-bottom: 6px; }
+.mname { font-weight: 700; font-size: 13px; }
+.mline { font-size: 11px; }
+.hpboxes { font-size: 13px; margin-top: 2px; letter-spacing: 1px; }
+.clear { font-size: 12px; font-style: italic; }
+.choices { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px;
+           margin-bottom: 8px; }
+.choices label { display: inline-block; }
+.rolls { font-size: 12px; margin-bottom: 6px; }
+.pad { height: 150px; border: 1px solid #ccc; border-radius: 4px;
+       background-image: repeating-linear-gradient(to bottom, #fff, #fff 26px, #eee 26px, #eee 27px); }
+"""
+
+
+def main():
+    campaign = load_json('campaign.json', 'DND_CAMPAIGN_FILE')
+    state = load_json('state.json', 'DND_STATE_FILE')
+
+    top = '\n'.join(s for s in (
+        render_header(campaign, state),
+        render_narrative(campaign, state),
+        render_map(campaign, state),
+    ) if s)
+
+    lower = (
+        '<div class="lower">'
+        f'{render_encounter(campaign, state)}'
+        f'{render_notes(campaign, state)}'
+        '</div>'
+    )
+
+    print(
+        '<!DOCTYPE html><html><head><meta charset="utf-8">'
+        f'<style>{CSS}</style></head><body>'
+        f'{top}{lower}'
+        '</body></html>'
+    )
+
+
+if __name__ == '__main__':
+    main()

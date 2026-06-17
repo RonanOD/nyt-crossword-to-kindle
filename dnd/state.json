@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "campaign": "The Sunken Vault (Solo Edition)",
+  "character": {
+    "name": "Hero",
+    "class": "Fighter",
+    "level": 1,
+    "max_hp": 12,
+    "current_hp": 12,
+    "ac": 16,
+    "inventory": ["Longsword", "Shield", "Health Potion x1"],
+    "modifiers": { "strength": 3, "dexterity": 1, "constitution": 2 }
+  },
+  "game_state": {
+    "current_node": "ravine_ledge",
+    "discovered_nodes": ["ravine_ledge"],
+    "defeated_monsters": [],
+    "turn_count": 0
+  },
+  "ingestion": {
+    "last_processed_message_id": null,
+    "awaiting_reply": false,
+    "turn_log": []
+  }
+}

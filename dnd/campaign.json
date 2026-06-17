@@ -1,0 +1,73 @@
+{
+  "campaign_name": "The Sunken Vault (Solo Edition)",
+  "schema_version": 1,
+  "grid": {
+    "cols": 5,
+    "rows": 5,
+    "note": "Node x/y are integer grid cells used by the fog-of-war map renderer. Origin (0,0) is top-left."
+  },
+  "start_node": "ravine_ledge",
+  "goal_node": "twisted_grove",
+  "nodes": {
+    "ravine_ledge": {
+      "title": "The Ravine Ledge",
+      "x": 2,
+      "y": 0,
+      "description": "A ledge overlooks a citadel sunk deep into the earth. A sturdy rope, knotted at intervals, is tied to a leaning pillar and drops into the dark below.",
+      "monsters": [],
+      "exits": { "down": "tower_entry" }
+    },
+    "tower_entry": {
+      "title": "The Tower Entry",
+      "x": 2,
+      "y": 1,
+      "description": "The rope ends on the masonry floor of a round, roofless tower room. Rubble and old leaves cover the ground. Two giant rats startle from a nest in the debris.",
+      "monsters": [
+        { "id": "rat_a", "name": "Giant Rat", "hp": 7, "ac": 12, "attack": "+4 to hit, 1d4+2 piercing" },
+        { "id": "rat_b", "name": "Giant Rat", "hp": 7, "ac": 12, "attack": "+4 to hit, 1d4+2 piercing" }
+      ],
+      "exits": { "north": "dry_fountain", "east": "rat_warren", "west": "goblin_guardpost" }
+    },
+    "dry_fountain": {
+      "title": "The Dry Fountain",
+      "x": 2,
+      "y": 2,
+      "description": "A cracked stone fountain dominates this chamber, long dry. Faded carvings of a thorned tree ring its basin. A dark passage continues south.",
+      "monsters": [],
+      "exits": { "down": "twisted_grove", "back": "tower_entry" }
+    },
+    "rat_warren": {
+      "title": "The Rat Warren",
+      "x": 3,
+      "y": 1,
+      "description": "A low side-chamber packed with shredded nesting material. The stink is overwhelming. A lone giant rat guards a glint of metal in the muck.",
+      "monsters": [
+        { "id": "rat_c", "name": "Giant Rat", "hp": 7, "ac": 12, "attack": "+4 to hit, 1d4+2 piercing" }
+      ],
+      "loot": ["Tarnished silver key"],
+      "exits": { "west": "tower_entry" }
+    },
+    "goblin_guardpost": {
+      "title": "The Goblin Guardpost",
+      "x": 1,
+      "y": 1,
+      "description": "Crude barricades of broken furniture block half the room. A goblin sentry crouches behind them, scimitar drawn, eyes wide in the gloom.",
+      "monsters": [
+        { "id": "goblin_a", "name": "Goblin", "hp": 7, "ac": 15, "attack": "+4 to hit, 1d6+2 slashing (scimitar)" }
+      ],
+      "exits": { "east": "tower_entry" }
+    },
+    "twisted_grove": {
+      "title": "The Twisted Grove",
+      "x": 2,
+      "y": 3,
+      "description": "The passage opens into an impossible underground grove lit by pale luminescent fungus. A gnarled white tree stands at its centre. Two twig blights skitter from its roots to bar your way.",
+      "monsters": [
+        { "id": "blight_a", "name": "Twig Blight", "hp": 4, "ac": 13, "attack": "+3 to hit, 1d4+1 piercing" },
+        { "id": "blight_b", "name": "Twig Blight", "hp": 4, "ac": 13, "attack": "+3 to hit, 1d4+1 piercing" }
+      ],
+      "is_goal": true,
+      "exits": { "up": "dry_fountain" }
+    }
+  }
+}

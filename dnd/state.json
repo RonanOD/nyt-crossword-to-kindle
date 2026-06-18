@@ -15,6 +15,8 @@
     "current_node": "ravine_ledge",
     "discovered_nodes": ["ravine_ledge"],
     "defeated_monsters": [],
+    "monster_hp": {},
+    "status": "active",
     "turn_count": 0
   },
   "ingestion": {

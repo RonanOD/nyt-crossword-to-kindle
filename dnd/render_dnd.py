@@ -50,10 +50,18 @@ def esc(value):
     return html.escape(str(value))
 
 
-def living_monsters(node, defeated):
-    """Monsters in a node that have not been recorded as defeated."""
-    defeated = set(defeated or [])
-    return [m for m in node.get('monsters', []) if m.get('id') not in defeated]
+def living_monsters(node, gs):
+    """Monsters in a node still standing per current monster_hp / defeated list."""
+    defeated = set(gs.get('defeated_monsters') or [])
+    monster_hp = gs.get('monster_hp') or {}
+    out = []
+    for m in node.get('monsters', []):
+        mid = m.get('id')
+        hp = monster_hp.get(mid, m.get('hp'))
+        if mid in defeated or (hp is not None and hp <= 0):
+            continue
+        out.append(m)
+    return out
 
 
 # --- SVG monster tokens (simple line-art silhouettes, no external assets) -----
@@ -124,11 +132,15 @@ def render_narrative(campaign, state):
     echo = ''
     if log:
         last = log[-1]
-        read = esc(last.get('summary', ''))
+        # Engine stores read (OCR's understanding) + result (what it did);
+        # older entries used a single 'summary'.
+        read = esc(last.get('read') or last.get('summary', ''))
+        result = esc(last.get('result', ''))
+        result_html = f'<br><strong>Result:</strong> {result}' if result else ''
         echo = (
             '<div class="echo">'
             '<strong>Last move, as I read it:</strong> '
-            f'{read} '
+            f'{read}{result_html} '
             '<span class="echo-q">&nbsp;&#9744; &times; misread &mdash; correct in Notes</span>'
             '</div>'
         )
@@ -234,8 +246,9 @@ def render_map(campaign, state):
 @section('encounter')
 def render_encounter(campaign, state):
     gs = state.get('game_state', {})
+    monster_hp = gs.get('monster_hp') or {}
     node = campaign['nodes'][gs['current_node']]
-    alive = living_monsters(node, gs.get('defeated_monsters'))
+    alive = living_monsters(node, gs)
     if not alive:
         return (
             '<div class="enc"><h3>Encounter</h3>'
@@ -244,16 +257,15 @@ def render_encounter(campaign, state):
 
     boxes = []
     for m in alive:
+        cur = monster_hp.get(m.get('id'), m.get('hp'))
         boxes.append(
             '<div class="mon">'
             f'<div class="tok">{_token_svg(m.get("name", "?"))}</div>'
             '<div class="mstat">'
             f'<div class="mname">{esc(m.get("name", "?"))}</div>'
             f'<div class="mline">AC <strong>{esc(m.get("ac", "?"))}</strong>'
-            f' &middot; HP <strong>{esc(m.get("hp", "?"))}</strong></div>'
+            f' &middot; HP <strong>{esc(cur)}</strong>/{esc(m.get("hp", "?"))}</div>'
             f'<div class="mline">{esc(m.get("attack", ""))}</div>'
-            '<div class="hpboxes">HP: &#9744;&#9744;&#9744;&#9744;&#9744;'
-            '&#9744;&#9744;&#9744;&#9744;&#9744;</div>'
             '</div></div>'
         )
     return f'<div class="enc"><h3>Encounter</h3>{"".join(boxes)}</div>'
@@ -275,13 +287,40 @@ def render_notes(campaign, state):
         '<label>&#9744; Drink potion</label>'
         '<label>&#9744; &times; misread last move</label>'
     )
+    # Distinct, labelled, single-purpose boxes — the OCR test showed a single
+    # run-on "dice" line let numbers land in the wrong slot.
+    roll_boxes = ''.join(
+        f'<div class="rollbox"><span class="rolllbl">{lbl}</span>'
+        '<span class="rollfill"></span></div>'
+        for lbl in ('To hit', 'Damage', 'Dmg taken')
+    )
     return (
         '<div class="notes"><h3>Your Move</h3>'
         f'<div class="choices">{exit_boxes}{action_boxes}</div>'
-        '<div class="rolls">Dice &mdash; to hit: ____  damage: ____  '
-        'dmg taken: ____</div>'
+        f'<div class="rolls">{roll_boxes}</div>'
         '<div class="pad"></div>'
         '</div>'
+    )
+
+
+def render_terminal(campaign, state):
+    """Render a campaign-over page (victory or defeat) with no move zone."""
+    gs = state.get('game_state', {})
+    ch = state.get('character', {})
+    status = gs.get('status')
+    log = state.get('ingestion', {}).get('turn_log', [])
+    last_result = esc(log[-1].get('result', '')) if log else ''
+    if status == 'won':
+        banner, sub = 'Victory', 'You have conquered the Sunken Vault.'
+    else:
+        banner, sub = 'You Have Fallen', 'The Sunken Vault claims another adventurer.'
+    return (
+        f'<div class="term"><div class="banner">{banner}</div>'
+        f'<p class="sub">{sub}</p>'
+        f'<p class="termline">{last_result}</p>'
+        f'<p class="termline">{esc(ch.get("name", "Hero"))} &middot; '
+        f'{esc(gs.get("turn_count", 0))} turns &middot; '
+        f'HP {esc(ch.get("current_hp", "?"))}/{esc(ch.get("max_hp", "?"))}</p></div>'
     )
 
 
@@ -299,7 +338,7 @@ h3 { font-size: 13px; margin: 4px 0; text-transform: uppercase; letter-spacing: 
         padding: 5px 7px; background: #f7f7f7; }
 .echo-q { color: #444; }
 .map { text-align: center; margin: 6px 0; }
-.map svg { max-height: 230px; }
+.map svg { max-height: 195px; }
 .lower { display: table; width: 100%; table-layout: fixed; margin-top: 6px; }
 .enc, .notes { display: table-cell; vertical-align: top; width: 50%; padding: 0 6px; }
 .enc { border-right: 1px dashed #aaa; }
@@ -312,15 +351,31 @@ h3 { font-size: 13px; margin: 4px 0; text-transform: uppercase; letter-spacing: 
 .choices { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px;
            margin-bottom: 8px; }
 .choices label { display: inline-block; }
-.rolls { font-size: 12px; margin-bottom: 6px; }
-.pad { height: 150px; border: 1px solid #ccc; border-radius: 4px;
+.rolls { display: flex; gap: 6px; margin-bottom: 8px; }
+.rollbox { flex: 1; border: 1px solid #000; border-radius: 4px; padding: 3px 4px; }
+.rolllbl { display: block; font-size: 9px; text-transform: uppercase;
+           letter-spacing: 1px; color: #444; }
+.rollfill { display: block; height: 26px; }
+.pad { height: 118px; border: 1px solid #ccc; border-radius: 4px;
        background-image: repeating-linear-gradient(to bottom, #fff, #fff 26px, #eee 26px, #eee 27px); }
+.term { text-align: center; padding-top: 60px; }
+.banner { font-size: 40px; font-weight: 700; letter-spacing: 2px; }
+.term .sub { font-size: 15px; margin-top: 8px; }
+.termline { font-size: 13px; color: #333; margin: 14px 0 0 0; }
 """
 
 
 def main():
     campaign = load_json('campaign.json', 'DND_CAMPAIGN_FILE')
     state = load_json('state.json', 'DND_STATE_FILE')
+
+    if state.get('game_state', {}).get('status') in ('won', 'dead'):
+        body = render_header(campaign, state) + render_terminal(campaign, state)
+        print(
+            '<!DOCTYPE html><html><head><meta charset="utf-8">'
+            f'<style>{CSS}</style></head><body>{body}</body></html>'
+        )
+        return
 
     top = '\n'.join(s for s in (
         render_header(campaign, state),

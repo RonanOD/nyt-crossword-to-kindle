@@ -16,3 +16,5 @@ services:
       # To allow for changing .env without restarting the container
       - ./.env:/crosswords/.env
       - ./process_ha.py:/crosswords/process_ha.py
+      # D&D campaign: live-editable scripts + persistent campaign/state JSON
+      - ./dnd:/crosswords/dnd

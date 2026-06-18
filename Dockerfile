@@ -23,6 +23,7 @@ COPY ./download-cbc-news.sh download-cbc-news.sh
 COPY ./process_html.py process_html.py
 COPY ./process_rss.py process_rss.py
 COPY ./process_ha.py process_ha.py
+COPY ./download-dnd.sh download-dnd.sh
 COPY ./main.sh main.sh
 
 ENTRYPOINT ["./main.sh"]

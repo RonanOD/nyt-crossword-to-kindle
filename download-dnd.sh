@@ -28,6 +28,45 @@ function verify_env_vars() {
     fi
 }
 
+function advance_game() {
+    # Pull the newest marked-up reply, interpret it, and apply it to state.json.
+    # Any failure (or no reply) leaves state untouched: render then shows the
+    # current page again. The actual email send stays gated on --disable-send.
+    if [ -z "${GEMINI_API_KEY}" ]; then
+        echo "GEMINI_API_KEY not set; skipping move interpretation (render current state)."
+        return
+    fi
+
+    source /opt/venv/bin/activate
+
+    local ingest_json status
+    ingest_json=$(python3 "${DND_PATH}/ingest_inbox.py") || {
+        echo "Ingest failed; rendering current state."; deactivate; return; }
+    status=$(echo "${ingest_json}" | jq -r '.status // "error"')
+
+    if [ "${status}" != "new_reply" ]; then
+        echo "No new reply (${status}); advancing nothing, re-rendering current page."
+        deactivate; return
+    fi
+
+    local att msgid move_file
+    att=$(echo "${ingest_json}" | jq -r '.attachment_path')
+    msgid=$(echo "${ingest_json}" | jq -r '.message_id')
+    move_file=$(mktemp /crosswords/tmp/dnd-move-XXXXXX.json)
+
+    echo "Interpreting reply ${msgid} ..."
+    if python3 "${DND_PATH}/process_vision.py" "${att}" > "${move_file}"; then
+        echo "Applying move to campaign state ..."
+        python3 "${DND_PATH}/engine.py" "${move_file}" --message-id "${msgid}" || \
+            echo "Engine failed; state unchanged."
+    else
+        echo "Vision interpretation failed; state unchanged."
+    fi
+
+    rm -f "${att}" "${move_file}"
+    deactivate
+}
+
 function render_page() {
     echo "Rendering D&D workbook page..."
     source /opt/venv/bin/activate
@@ -82,6 +121,13 @@ function send_to_telegram() {
         return
     fi
 
+    # Unlike the news script, the D&D page honours --disable-send for Telegram
+    # too, so dev/iteration runs don't spam the chat.
+    if [ -n "${DISABLE_SEND}" ]; then
+        echo "Sending disabled. Will not send ${pdf_name} to Telegram."
+        return
+    fi
+
     echo "Sending ${pdf_name} to Telegram chat ${TELEGRAM_CHAT_ID}"
     response=$(curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
         -F chat_id="${TELEGRAM_CHAT_ID}" \
@@ -113,6 +159,7 @@ echo -e "
 
 verify_env_vars
 parse_flags "$@"
+advance_game
 render_page
 send_to_kindle "${OUTPUT_PDF_PATH}"
 send_to_telegram "${OUTPUT_PDF_PATH}"

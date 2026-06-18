@@ -50,6 +50,8 @@ wait_until_send_time() {
 # Initial downloads
 ${SCRIPT_PATH}/download-crossword.sh ${CROSSWORD_COMMAND_LINE_ARGUMENTS}
 ${SCRIPT_PATH}/download-cbc-news.sh ${CROSSWORD_COMMAND_LINE_ARGUMENTS}
+# D&D page is optional/experimental: never let it take down crossword/news.
+${SCRIPT_PATH}/download-dnd.sh ${CROSSWORD_COMMAND_LINE_ARGUMENTS} || true
 
 # Daily crossword and news sending
 while true; do
@@ -62,4 +64,5 @@ while true; do
   source ${SCRIPT_PATH}/.env
   ${SCRIPT_PATH}/download-crossword.sh ${CROSSWORD_COMMAND_LINE_ARGUMENTS}
   ${SCRIPT_PATH}/download-cbc-news.sh ${CROSSWORD_COMMAND_LINE_ARGUMENTS}
+  ${SCRIPT_PATH}/download-dnd.sh ${CROSSWORD_COMMAND_LINE_ARGUMENTS} || true
 done

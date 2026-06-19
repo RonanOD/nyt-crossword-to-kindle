@@ -19,6 +19,7 @@ Env: DND_CAMPAIGN_FILE / DND_STATE_FILE override the default dnd/*.json paths.
 
 import json
 import os
+import re
 import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -26,6 +27,20 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def path_for(name, env_override):
     return os.environ.get(env_override) or os.path.join(SCRIPT_DIR, name)
+
+
+def consume_potion(inventory, idx):
+    """Decrement an 'xN' potion count in place, dropping the entry at zero."""
+    item = inventory[idx]
+    m = re.search(r'x\s*(\d+)', item, re.I)
+    if m:
+        n = int(m.group(1)) - 1
+        if n <= 0:
+            inventory.pop(idx)
+        else:
+            inventory[idx] = re.sub(r'x\s*\d+', f'x{n}', item, flags=re.I)
+    else:
+        inventory.pop(idx)
 
 
 def load(path):
@@ -58,6 +73,11 @@ def apply_move(state, campaign, move, message_id):
     ch = state['character']
     events = []
 
+    checkboxes = [str(c).lower() for c in (move.get('checkboxes_marked') or [])]
+
+    def marked(substr):
+        return any(substr in c for c in checkboxes)
+
     monster_hp = gs.setdefault('monster_hp', {})
     gs.setdefault('status', 'active')
     node = campaign['nodes'][gs['current_node']]
@@ -73,8 +93,7 @@ def apply_move(state, campaign, move, message_id):
     if damage is None:
         damage = find_roll(move, 'damage')
     attacked = bool(
-        target and (damage is not None or to_hit is not None
-                    or 'attack' in [c.lower() for c in move.get('checkboxes_marked', [])])
+        target and (damage is not None or to_hit is not None or marked('attack'))
     )
 
     if attacked:
@@ -97,6 +116,41 @@ def apply_move(state, campaign, move, message_id):
         ch['current_hp'] = max(0, ch['current_hp'] - taken)
         events.append(f'You took {taken} damage (HP {ch["current_hp"]}/{ch["max_hp"]}).')
 
+    # --- Drink a potion (player rolls 2d4+2 and writes the total) ----------
+    if marked('potion'):
+        inv = ch.setdefault('inventory', [])
+        idx = next((i for i, it in enumerate(inv) if 'potion' in str(it).lower()), None)
+        heal = move.get('heal_amount')
+        if idx is None:
+            events.append('You reach for a potion, but have none left.')
+        elif heal is None:
+            events.append('You ready a potion, but no healing roll was read — '
+                          'write your 2d4+2 total in the Heal box.')
+        else:
+            before = ch['current_hp']
+            new_hp = before + heal
+            if ch.get('max_hp') is not None:
+                new_hp = min(ch['max_hp'], new_hp)
+            ch['current_hp'] = new_hp
+            consume_potion(inv, idx)
+            events.append(f'You drink a potion and recover {new_hp - before} HP '
+                          f'(now {new_hp}/{ch.get("max_hp", "?")}).')
+
+    # --- Search the room for loot ------------------------------------------
+    if marked('search'):
+        searched = gs.setdefault('searched_nodes', [])
+        loot = node.get('loot', [])
+        if gs['current_node'] in searched:
+            events.append('You search again, but find nothing new.')
+        elif loot:
+            ch.setdefault('inventory', []).extend(loot)
+            searched.append(gs['current_node'])
+            events.append('You search and find: ' + ', '.join(loot) + '.')
+        else:
+            searched.append(gs['current_node'])
+            events.append('You search, but find nothing of value.')
+
+    # --- Death check (after any healing applied this turn) -----------------
     if ch['current_hp'] <= 0:
         gs['status'] = 'dead'
         events.append('You have fallen. The campaign ends here.')

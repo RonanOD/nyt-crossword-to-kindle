@@ -22,6 +22,13 @@ function verify_env_vars() {
         exit 1
     fi
 
+    # state.json holds live progress and is gitignored; seed it from the
+    # tracked initial state on first run (or after a campaign reset/delete).
+    if [ ! -f "${DND_PATH}/state.json" ] && [ -f "${DND_PATH}/state.initial.json" ]; then
+        echo "No state.json found; seeding new campaign from state.initial.json."
+        cp "${DND_PATH}/state.initial.json" "${DND_PATH}/state.json"
+    fi
+
     if [ -z "${KINDLE_EMAIL_ADDRESS}" ] && { [ -z "${TELEGRAM_BOT_TOKEN}" ] || [ -z "${TELEGRAM_CHAT_ID}" ]; }; then
         echo "Neither Kindle email nor Telegram details are set. Nothing to deliver. Exiting."
         exit 1

@@ -7,3 +7,6 @@ settings.json
 token.json
 __pycache__/
 .DS_Store
+
+# Live D&D campaign state (seeded from dnd/state.initial.json)
+dnd/state.json

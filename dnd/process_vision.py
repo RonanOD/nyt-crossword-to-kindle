@@ -49,6 +49,7 @@ PROMPT = (
     '"total": <int or null>}],\n'
     '  "damage_dealt": <int or null>,\n'
     '  "damage_taken": <int or null>,\n'
+    '  "heal_amount": <int total written in the Heal box for a potion, or null>,\n'
     '  "chosen_exit": <string direction like "north"/"down" or null>,\n'
     '  "checkboxes_marked": [<labels of ticked checkboxes, verbatim>],\n'
     '  "misread_flag": <true if the "x misread last move" box is ticked, else false>,\n'

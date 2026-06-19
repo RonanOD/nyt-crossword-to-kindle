@@ -114,11 +114,17 @@ def render_header(campaign, state):
     hp = f"{ch.get('current_hp', '?')}/{ch.get('max_hp', '?')}"
     ac = esc(ch.get('ac', '?'))
     turn = esc(gs.get('turn_count', 0))
+    inv = ch.get('inventory') or []
+    inv_html = (
+        f'<div class="inv">Carrying: {esc(", ".join(str(i) for i in inv))}</div>'
+        if inv else ''
+    )
     return (
         f'<div class="hdr">'
         f'<div class="title">{esc(campaign.get("campaign_name", "Solo Campaign"))}</div>'
         f'<div class="stats">{name} &middot; {klass} {level} &middot; '
         f'HP {esc(hp)} &middot; AC {ac} &middot; Turn {turn}</div>'
+        f'{inv_html}'
         f'</div>'
     )
 
@@ -274,25 +280,30 @@ def render_encounter(campaign, state):
 @section('notes')
 def render_notes(campaign, state):
     gs = state.get('game_state', {})
+    ch = state.get('character', {})
     node = campaign['nodes'][gs['current_node']]
     exits = node.get('exits', {})
+    has_potion = any('potion' in str(i).lower() for i in (ch.get('inventory') or []))
 
     exit_boxes = ''.join(
         f'<label>&#9744; Go {esc(direction)}</label>'
         for direction in exits
     )
+    potion_box = '<label>&#9744; Drink potion (2d4+2)</label>' if has_potion else ''
     action_boxes = (
         '<label>&#9744; Attack</label>'
         '<label>&#9744; Search</label>'
-        '<label>&#9744; Drink potion</label>'
+        f'{potion_box}'
         '<label>&#9744; &times; misread last move</label>'
     )
     # Distinct, labelled, single-purpose boxes — the OCR test showed a single
-    # run-on "dice" line let numbers land in the wrong slot.
+    # run-on "dice" line let numbers land in the wrong slot. The Heal box only
+    # appears when a potion is carried.
+    labels = ['To hit', 'Damage', 'Dmg taken'] + (['Heal'] if has_potion else [])
     roll_boxes = ''.join(
         f'<div class="rollbox"><span class="rolllbl">{lbl}</span>'
         '<span class="rollfill"></span></div>'
-        for lbl in ('To hit', 'Damage', 'Dmg taken')
+        for lbl in labels
     )
     return (
         '<div class="notes"><h3>Your Move</h3>'
@@ -331,14 +342,15 @@ body { font-family: 'DejaVu Serif', serif; color: #000; margin: 0; }
 .hdr { border-bottom: 2px solid #000; padding-bottom: 4px; margin-bottom: 6px; }
 .hdr .title { font-size: 17px; font-weight: 700; }
 .hdr .stats { font-size: 12px; color: #333; }
+.hdr .inv { font-size: 10px; color: #555; margin-top: 1px; }
 h2 { font-size: 16px; margin: 4px 0; }
 h3 { font-size: 13px; margin: 4px 0; text-transform: uppercase; letter-spacing: 1px; }
 .narr p { font-size: 13px; line-height: 1.35; margin: 2px 0 6px 0; }
-.echo { font-size: 12px; border: 1px solid #888; border-radius: 4px;
-        padding: 5px 7px; background: #f7f7f7; }
+.echo { font-size: 11px; line-height: 1.3; border: 1px solid #888; border-radius: 4px;
+        padding: 4px 6px; background: #f7f7f7; }
 .echo-q { color: #444; }
-.map { text-align: center; margin: 6px 0; }
-.map svg { max-height: 195px; }
+.map { text-align: center; margin: 4px 0; }
+.map svg { max-height: 150px; }
 .lower { display: table; width: 100%; table-layout: fixed; margin-top: 6px; }
 .enc, .notes { display: table-cell; vertical-align: top; width: 50%; padding: 0 6px; }
 .enc { border-right: 1px dashed #aaa; }
@@ -356,7 +368,7 @@ h3 { font-size: 13px; margin: 4px 0; text-transform: uppercase; letter-spacing: 
 .rolllbl { display: block; font-size: 9px; text-transform: uppercase;
            letter-spacing: 1px; color: #444; }
 .rollfill { display: block; height: 26px; }
-.pad { height: 118px; border: 1px solid #ccc; border-radius: 4px;
+.pad { height: 90px; border: 1px solid #ccc; border-radius: 4px;
        background-image: repeating-linear-gradient(to bottom, #fff, #fff 26px, #eee 26px, #eee 27px); }
 .term { text-align: center; padding-top: 60px; }
 .banner { font-size: 40px; font-weight: 700; letter-spacing: 2px; }

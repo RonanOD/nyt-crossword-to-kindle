@@ -16,6 +16,7 @@
     "discovered_nodes": ["ravine_ledge"],
     "defeated_monsters": [],
     "monster_hp": {},
+    "searched_nodes": [],
     "status": "active",
     "turn_count": 0
   },

@@ -64,8 +64,11 @@ function advance_game() {
     echo "Interpreting reply ${msgid} ..."
     if python3 "${DND_PATH}/process_vision.py" "${att}" > "${move_file}"; then
         echo "Applying move to campaign state ..."
-        python3 "${DND_PATH}/engine.py" "${move_file}" --message-id "${msgid}" || \
+        if python3 "${DND_PATH}/engine.py" "${move_file}" --message-id "${msgid}"; then
+            MOVE_APPLIED=true  # global: tells --poll mode a page is worth sending
+        else
             echo "Engine failed; state unchanged."
+        fi
     else
         echo "Vision interpretation failed; state unchanged."
     fi
@@ -155,6 +158,10 @@ function parse_flags() {
                 echo 'Sending disabled. Will only render the D&D page.'
                 DISABLE_SEND=true
                 ;;
+            --poll)
+                # Inbox poll: only render/send when a reply actually advances the game.
+                POLL_MODE=true
+                ;;
         esac
         shift
     done
@@ -167,9 +174,16 @@ echo -e "
 verify_env_vars
 parse_flags "$@"
 advance_game
-render_page
-send_to_kindle "${OUTPUT_PDF_PATH}"
-send_to_telegram "${OUTPUT_PDF_PATH}"
+
+# In --poll mode, stay silent unless a move was applied this run (avoids
+# re-sending the same page every poll). Normal/daily runs always send.
+if [ -n "${POLL_MODE}" ] && [ -z "${MOVE_APPLIED}" ]; then
+    echo "Poll: no new move applied; not rendering or sending."
+else
+    render_page
+    send_to_kindle "${OUTPUT_PDF_PATH}"
+    send_to_telegram "${OUTPUT_PDF_PATH}"
+fi
 
 echo -e "-----------------D&D PAGE SENDER FINISHED-----------------
 "

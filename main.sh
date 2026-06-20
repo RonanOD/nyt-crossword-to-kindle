@@ -4,65 +4,42 @@ set -eo pipefail
 
 SCRIPT_PATH="$(dirname "$(readlink -f "$0")")"
 
-get_human_readable_time_from_seconds() {
-  local seconds="${1}"
-  local hours=$((diff / 3600))
-  local minutes=$(((diff % 3600) / 60))
-  local seconds=$((diff % 60))
-  echo "${hours} hours ${minutes} minutes and ${seconds} seconds"
-}
-
-get_human_readable_time_from_epoch_seconds() {
-  local epoch_seconds="${1}"
-  echo $(date -d "@${epoch_seconds}" +"%b %-d %Y, %H:%M")
-}
-
-get_wait_time() {
-    local target=${1}
-    local now=$(date +%s)
-    echo $(( target - now ))
-}
-
-wait_until_send_time() {
-  local restart_time="${1}"
-  local now=$(date +%s)
-  local target=$(date -d "${restart_time}" +%s)
-  
-  echo "The current time is: $(get_human_readable_time_from_epoch_seconds ${now})"
-  
-  # If target time has already passed today, move to tomorrow
-  if [ "${target}" -le "${now}" ]; then
-      target=$(date -d "tomorrow ${restart_time}" +%s)
-  fi
-  echo "Next restart will be: $(get_human_readable_time_from_epoch_seconds ${target})"
-
-  # Wait until it's time to send again
-  local diff=$(get_wait_time ${target})
-  while [ "${diff}" -ge 0 ]; do
-    echo "Waiting another $(get_human_readable_time_from_seconds ${diff}) to send..."
-    sleep 60;
-    diff=$(get_wait_time ${target})
-  done
+run_daily() {
+  # Full daily set: crossword + news, plus a D&D page (sent even with no move).
+  # D&D is optional/experimental: never let it take down crossword/news.
+  ${SCRIPT_PATH}/download-crossword.sh ${CROSSWORD_COMMAND_LINE_ARGUMENTS}
+  ${SCRIPT_PATH}/download-cbc-news.sh ${CROSSWORD_COMMAND_LINE_ARGUMENTS}
+  ${SCRIPT_PATH}/download-dnd.sh ${CROSSWORD_COMMAND_LINE_ARGUMENTS} || true
 }
 
 #### BEGIN MAIN EXECUTION
 
-# Initial downloads
-${SCRIPT_PATH}/download-crossword.sh ${CROSSWORD_COMMAND_LINE_ARGUMENTS}
-${SCRIPT_PATH}/download-cbc-news.sh ${CROSSWORD_COMMAND_LINE_ARGUMENTS}
-# D&D page is optional/experimental: never let it take down crossword/news.
-${SCRIPT_PATH}/download-dnd.sh ${CROSSWORD_COMMAND_LINE_ARGUMENTS} || true
+POLL_INTERVAL="${DND_POLL_INTERVAL_SECONDS:-3600}"
+DAILY_TIME="${CROSSWORD_DAILY_SEND_TIME:-08:00}"
 
-# Daily crossword and news sending
+# Run the full set once at startup.
+run_daily
+last_daily="$(date +%F)"
+
+echo "D&D inbox polled every ${POLL_INTERVAL}s; crossword + news sent daily at ${DAILY_TIME} ${TZ}."
+
 while true; do
-  RESTART_TIME="${CROSSWORD_DAILY_SEND_TIME:-08:00}"
-  echo "Will send your crossword and news every day at: ${RESTART_TIME} ${TZ} time"
+  sleep "${POLL_INTERVAL}"
 
-  wait_until_send_time "${RESTART_TIME}"
-
-  # Source .env to detect any changes to command-line arguments
+  # Re-read .env so edits (send time, args, poll interval) apply without a rebuild.
   source ${SCRIPT_PATH}/.env
-  ${SCRIPT_PATH}/download-crossword.sh ${CROSSWORD_COMMAND_LINE_ARGUMENTS}
-  ${SCRIPT_PATH}/download-cbc-news.sh ${CROSSWORD_COMMAND_LINE_ARGUMENTS}
-  ${SCRIPT_PATH}/download-dnd.sh ${CROSSWORD_COMMAND_LINE_ARGUMENTS} || true
+
+  # Frequent D&D poll: fetch any reply while its Amazon share link is still fresh
+  # (the links expire within a day) and advance the game. --poll only renders and
+  # sends a page when a move was actually applied, so idle hours stay silent.
+  ${SCRIPT_PATH}/download-dnd.sh --poll ${CROSSWORD_COMMAND_LINE_ARGUMENTS} || true
+
+  # Daily crossword + news (and a fresh full D&D page) once per day at/after DAILY_TIME.
+  today="$(date +%F)"
+  now_hm="$(date +%H:%M)"
+  if [ "${today}" != "${last_daily}" ] && [[ "${now_hm}" > "${DAILY_TIME}" || "${now_hm}" == "${DAILY_TIME}" ]]; then
+    echo "Daily send time reached (${now_hm} ${TZ})."
+    run_daily
+    last_daily="${today}"
+  fi
 done

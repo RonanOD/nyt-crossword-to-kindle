@@ -20,7 +20,7 @@ This is a Dockerized cron-loop that produces two PDFs each morning (NYT crosswor
 
 ### Runtime shape
 
-`main.sh` is the entrypoint and the only long-running process. It runs the two download scripts once at startup, then loops forever: sleep until `CROSSWORD_DAILY_SEND_TIME` (in `TZ`), `source .env` to pick up edits, run both scripts again. The container has `restart: unless-stopped` but the loop itself does the scheduling — there is no system cron.
+`main.sh` is the entrypoint and the only long-running process. It runs the full set (crossword + news + D&D) once at startup, then loops on a short poll interval (`DND_POLL_INTERVAL_SECONDS`, default 3600): each pass `source .env`, poll the D&D inbox (`download-dnd.sh --poll`, which only renders/sends when a reply actually advances the game), and — once per day at/after `CROSSWORD_DAILY_SEND_TIME` in `TZ` — run the full crossword + news + D&D send again. The frequent poll exists because the Kindle Scribe's Amazon share links expire within a day, so a once-daily fetch often arrives too late. The container has `restart: unless-stopped` but the loop itself does the scheduling — there is no system cron.
 
 ### Two pipelines, sharing the same container
 

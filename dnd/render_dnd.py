@@ -78,29 +78,42 @@ def _signed(n):
     return f'+{n}' if n >= 0 else str(n)
 
 
-def combat_help(state):
-    """A one-line reminder of what to roll for attack + damage, with modifiers."""
+def combat_help(state, living):
+    """Per-action dice/DC reminder shown during a fight, with modifiers."""
     ch = state.get('character', {})
-    str_mod = (ch.get('modifiers') or {}).get('strength', 0)
+    mods = ch.get('modifiers') or {}
+    str_mod = mods.get('strength', 0)
+    dex_mod = mods.get('dexterity', 0)
     prof = proficiency_bonus(ch.get('level', 1))
     atk = str_mod + prof
 
-    die, wname = '1d8', 'weapon'
+    die = '1d8'
     for item in ch.get('inventory') or []:
         match = next((v for k, v in WEAPON_DICE.items() if k in str(item).lower()), None)
         if match:
-            wname, die = match
+            die = match[1]
             break
 
-    return (
-        '<div class="combathelp">'
-        f'<strong>Roll to hit:</strong> 1d20{_signed(atk)} vs AC '
-        f'<span class="dim">(STR {_signed(str_mod)}, prof +{prof})</span>'
-        ' &nbsp;&middot;&nbsp; '
-        f'<strong>Damage:</strong> {die}{_signed(str_mod)} '
-        f'<span class="dim">({wname} + STR)</span>'
-        '</div>'
-    )
+    stealth_b = dex_mod
+    if 'stealth' in [str(s).lower() for s in (ch.get('skill_proficiencies') or [])]:
+        stealth_b += prof
+    perc_dc = max((m.get('passive_perception', 10) for m in living), default=10)
+    mon_init = max((10 + m.get('dex_mod', 0) for m in living), default=10)
+
+    rows = [
+        f'<div><strong>Attack:</strong> 1d20{_signed(atk)} vs AC '
+        f'<span class="dim">(STR {_signed(str_mod)}, prof +{prof})</span> &middot; '
+        f'dmg {die}{_signed(str_mod)}</div>',
+        f'<div><strong>Sneak past:</strong> Stealth 1d20{_signed(stealth_b)} '
+        f'vs passive Perception {perc_dc} <span class="dim">(+ tick an exit)</span></div>',
+        '<div><strong>Dodge:</strong> enemy attacks at disadvantage '
+        '<span class="dim">(roll its attack twice, take the lower)</span></div>',
+        '<div><strong>Flee:</strong> retreat <span class="dim">(+ tick an exit; '
+        'provokes one attack)</span></div>',
+        f'<div><strong>Initiative:</strong> 1d20{_signed(dex_mod)} vs {mon_init} '
+        '<span class="dim">(win &rarr; strike first)</span></div>',
+    ]
+    return '<div class="combathelp">' + ''.join(rows) + '</div>'
 
 
 def living_monsters(node, gs):
@@ -327,7 +340,12 @@ def render_encounter(campaign, state):
             f'<div class="mline">{esc(m.get("attack", ""))}</div>'
             '</div></div>'
         )
-    return f'<div class="enc"><h3>Encounter</h3>{"".join(boxes)}</div>'
+    # The per-action dice guide lives here, under the monster(s), to use the
+    # otherwise-empty left column and keep the page to one sheet.
+    return (
+        f'<div class="enc"><h3>Encounter</h3>{"".join(boxes)}'
+        f'{combat_help(state, alive)}</div>'
+    )
 
 
 @section('notes')
@@ -344,28 +362,46 @@ def render_notes(campaign, state):
         for direction in exits
     )
     potion_box = '<label>&#9744; Drink potion (2d4+2)</label>' if has_potion else ''
-    action_boxes = (
-        '<label>&#9744; Attack</label>'
-        '<label>&#9744; Search</label>'
-        f'{potion_box}'
-        '<label>&#9744; &times; misread last move</label>'
-    )
-    # Distinct, labelled, single-purpose boxes — the OCR test showed a single
-    # run-on "dice" line let numbers land in the wrong slot. The Heal box only
-    # appears when a potion is carried.
-    labels = ['To hit', 'Damage', 'Dmg taken'] + (['Heal'] if has_potion else [])
+
+    if in_combat:
+        action_boxes = (
+            '<label>&#9744; Attack</label>'
+            '<label>&#9744; Sneak past</label>'
+            '<label>&#9744; Dodge</label>'
+            '<label>&#9744; Flee</label>'
+            '<label>&#9744; Roll initiative</label>'
+            '<label>&#9744; Search</label>'
+            f'{potion_box}'
+            '<label>&#9744; &times; misread last move</label>'
+        )
+    else:
+        action_boxes = (
+            '<label>&#9744; Search</label>'
+            f'{potion_box}'
+            '<label>&#9744; &times; misread last move</label>'
+        )
+
+    # Distinct, labelled, single-purpose write-in boxes (the OCR test showed a
+    # run-on line let numbers land in the wrong slot). Combat boxes only appear
+    # in a fight; Heal only when a potion is carried. The row wraps if needed.
+    labels = (['To hit', 'Damage', 'Dmg taken', 'Stealth', 'Init'] if in_combat else [])
+    if has_potion:
+        labels.append('Heal')
     roll_boxes = ''.join(
         f'<div class="rollbox"><span class="rolllbl">{lbl}</span>'
         '<span class="rollfill"></span></div>'
         for lbl in labels
     )
-    combat_html = combat_help(state) if in_combat else ''
+    rolls_html = f'<div class="rolls">{roll_boxes}</div>' if labels else ''
+    # The freeform note pad is for exploration turns; in a fight the dice guide +
+    # roll boxes fill the column, so drop it to keep the busiest page on one sheet.
+    pad_html = '' if in_combat else '<div class="pad"></div>'
+
     return (
         '<div class="notes"><h3>Your Move</h3>'
         f'<div class="choices">{exit_boxes}{action_boxes}</div>'
-        f'{combat_html}'
-        f'<div class="rolls">{roll_boxes}</div>'
-        '<div class="pad"></div>'
+        f'{rolls_html}'
+        f'{pad_html}'
         '</div>'
     )
 
@@ -406,7 +442,7 @@ h3 { font-size: 13px; margin: 4px 0; text-transform: uppercase; letter-spacing: 
         padding: 4px 6px; background: #f7f7f7; }
 .echo-q { color: #444; }
 .map { text-align: center; margin: 4px 0; }
-.map svg { max-height: 150px; }
+.map svg { max-height: 140px; }
 .lower { display: table; width: 100%; table-layout: fixed; margin-top: 6px; }
 .enc, .notes { display: table-cell; vertical-align: top; width: 50%; padding: 0 6px; }
 .enc { border-right: 1px dashed #aaa; }
@@ -419,14 +455,15 @@ h3 { font-size: 13px; margin: 4px 0; text-transform: uppercase; letter-spacing: 
 .choices { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px;
            margin-bottom: 8px; }
 .choices label { display: inline-block; }
-.combathelp { font-size: 10.5px; margin: 0 0 6px 0; line-height: 1.3; }
+.combathelp { font-size: 10px; margin: 0 0 5px 0; line-height: 1.3; }
+.combathelp div { margin: 1px 0; }
 .combathelp .dim { color: #666; }
-.rolls { display: flex; gap: 6px; margin-bottom: 8px; }
-.rollbox { flex: 1; border: 1px solid #000; border-radius: 4px; padding: 3px 4px; }
+.rolls { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+.rollbox { flex: 1 0 76px; border: 1px solid #000; border-radius: 4px; padding: 3px 4px; }
 .rolllbl { display: block; font-size: 9px; text-transform: uppercase;
            letter-spacing: 1px; color: #444; }
 .rollfill { display: block; height: 26px; }
-.pad { height: 90px; border: 1px solid #ccc; border-radius: 4px;
+.pad { height: 64px; border: 1px solid #ccc; border-radius: 4px;
        background-image: repeating-linear-gradient(to bottom, #fff, #fff 26px, #eee 26px, #eee 27px); }
 .term { text-align: center; padding-top: 60px; }
 .banner { font-size: 40px; font-weight: 700; letter-spacing: 2px; }

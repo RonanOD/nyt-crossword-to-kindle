@@ -17,6 +17,7 @@
     "defeated_monsters": [],
     "monster_hp": {},
     "searched_nodes": [],
+    "combat": { "node": null, "player_first": null },
     "status": "active",
     "turn_count": 0
   },

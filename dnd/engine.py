@@ -67,6 +67,33 @@ def ensure_monsters(node, monster_hp):
         monster_hp.setdefault(m['id'], m['hp'])
 
 
+def monster_passive_perception(m):
+    return m.get('passive_perception', 10)
+
+
+def monster_initiative(m):
+    # Deterministic "take 10" initiative for the monster (no engine dice).
+    return 10 + m.get('dex_mod', 0)
+
+
+def _move(gs, campaign, monster_hp, direction, events, verb):
+    """Move the player along an exit, discovering + seeding the destination and
+    resetting the per-encounter combat tracker. Returns True on success."""
+    exits = {k.lower(): v for k, v in campaign['nodes'][gs['current_node']].get('exits', {}).items()}
+    dest = exits.get(direction)
+    if not dest or dest not in campaign['nodes']:
+        events.append(f'There is no "{direction}" exit from here.')
+        return False
+    gs['current_node'] = dest
+    if dest not in gs.setdefault('discovered_nodes', []):
+        gs['discovered_nodes'].append(dest)
+    dest_node = campaign['nodes'][dest]
+    ensure_monsters(dest_node, monster_hp)
+    gs['combat'] = {'node': dest, 'player_first': None}
+    events.append(f'{verb} {direction} to {dest_node["title"]}.')
+    return True
+
+
 def apply_move(state, campaign, move, message_id):
     gs = state['game_state']
     ing = state.setdefault('ingestion', {})
@@ -86,17 +113,62 @@ def apply_move(state, campaign, move, message_id):
     if move.get('misread_flag'):
         events.append('You flagged the previous read as a misread.')
 
-    # --- Player attack on the first living monster -------------------------
-    target = (living_in(node, monster_hp) or [None])[0]
+    living = living_in(node, monster_hp)
+    target = living[0] if living else None
+    chosen = (move.get('chosen_exit') or '').strip().lower() or None
+
+    sneak = bool(target) and (marked('sneak') or marked('stealth'))
+    flee = bool(target) and (marked('flee') or marked('retreat'))
+    dodge = bool(target) and marked('dodge')
+
     to_hit = find_roll(move, 'hit')
     damage = move.get('damage_dealt')
     if damage is None:
         damage = find_roll(move, 'damage')
-    attacked = bool(
-        target and (damage is not None or to_hit is not None or marked('attack'))
+    attack = bool(target) and not (sneak or flee or dodge) and (
+        damage is not None or to_hit is not None or marked('attack')
     )
 
-    if attacked:
+    def apply_damage_taken(note=''):
+        taken = move.get('damage_taken')
+        if taken:
+            ch['current_hp'] = max(0, ch['current_hp'] - taken)
+            suffix = f' {note}' if note else ''
+            events.append(
+                f'You took {taken} damage{suffix} (HP {ch["current_hp"]}/{ch["max_hp"]}).')
+
+    # --- Initiative (add-on, resolved once per encounter) ------------------
+    combat = gs.setdefault('combat', {'node': None, 'player_first': None})
+    if combat.get('node') != gs['current_node']:
+        combat = {'node': gs['current_node'], 'player_first': None}
+        gs['combat'] = combat
+    init_roll = move.get('initiative_roll')
+    if target and init_roll is not None and combat.get('player_first') is None:
+        mon_init = max(monster_initiative(m) for m in living)
+        combat['player_first'] = init_roll >= mon_init
+        verdict = 'you act first!' if combat['player_first'] else 'the enemy acts first.'
+        events.append(f'Initiative: {init_roll} vs {mon_init} — {verdict}')
+
+    # --- Primary action: sneak > flee > dodge > attack ---------------------
+    sneak_success = False
+    if sneak:
+        stealth = move.get('stealth_roll')
+        dc = max(monster_passive_perception(m) for m in living)
+        if stealth is None:
+            events.append('You try to sneak, but no Stealth roll was read — '
+                          'write your total in the Stealth box.')
+        elif stealth >= dc:
+            sneak_success = True
+            events.append(f'You move unseen (Stealth {stealth} vs passive Perception {dc}).')
+        else:
+            events.append(f'You are spotted! (Stealth {stealth} vs passive Perception {dc})')
+            apply_damage_taken('as you are caught')
+    elif flee:
+        apply_damage_taken('as you turn to run')  # leaving melee provokes an attack
+    elif dodge:
+        events.append('You take the Dodge action — the enemy attacks at disadvantage.')
+        apply_damage_taken()
+    elif attack:
         ac = target.get('ac')
         if to_hit is not None and ac is not None and to_hit < ac:
             events.append(f'Missed {target["name"]} (rolled {to_hit} vs AC {ac}).')
@@ -109,12 +181,13 @@ def apply_move(state, campaign, move, message_id):
                 if target['id'] not in gs.setdefault('defeated_monsters', []):
                     gs['defeated_monsters'].append(target['id'])
                 events.append(f'{target["name"]} defeated!')
-
-    # --- Damage taken by the hero (player rolled the monster's attack) -----
-    taken = move.get('damage_taken')
-    if taken:
-        ch['current_hp'] = max(0, ch['current_hp'] - taken)
-        events.append(f'You took {taken} damage (HP {ch["current_hp"]}/{ch["max_hp"]}).')
+        # The monster swings back, unless you won initiative and cleared the room.
+        if combat.get('player_first') and not living_in(node, monster_hp):
+            events.append('You struck first and dropped it before it could swing — no damage taken.')
+        else:
+            apply_damage_taken()
+    else:
+        apply_damage_taken()
 
     # --- Drink a potion (player rolls 2d4+2 and writes the total) ----------
     if marked('potion'):
@@ -155,23 +228,17 @@ def apply_move(state, campaign, move, message_id):
         gs['status'] = 'dead'
         events.append('You have fallen. The campaign ends here.')
 
-    # --- Movement (only once the room is clear) ----------------------------
-    chosen = (move.get('chosen_exit') or '').strip().lower() or None
+    # --- Movement ----------------------------------------------------------
     if gs['status'] == 'active' and chosen:
-        if living_in(node, monster_hp):
-            events.append('Enemies still block the way — clear the room before moving.')
+        if sneak_success:
+            _move(gs, campaign, monster_hp, chosen, events, 'You slip')
+        elif flee:
+            _move(gs, campaign, monster_hp, chosen, events, 'You flee')
+        elif living_in(node, monster_hp):
+            if not (sneak or flee):
+                events.append('Enemies still block the way — clear the room, or Sneak past / Flee.')
         else:
-            exits = {k.lower(): v for k, v in node.get('exits', {}).items()}
-            dest = exits.get(chosen)
-            if not dest or dest not in campaign['nodes']:
-                events.append(f'There is no "{chosen}" exit from here.')
-            else:
-                gs['current_node'] = dest
-                if dest not in gs.setdefault('discovered_nodes', []):
-                    gs['discovered_nodes'].append(dest)
-                dest_node = campaign['nodes'][dest]
-                ensure_monsters(dest_node, monster_hp)
-                events.append(f'You go {chosen} to {dest_node["title"]}.')
+            _move(gs, campaign, monster_hp, chosen, events, 'You go')
 
     # --- Victory: goal node reached and cleared ----------------------------
     cur = campaign['nodes'][gs['current_node']]

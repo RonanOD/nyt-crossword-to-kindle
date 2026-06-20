@@ -50,6 +50,59 @@ def esc(value):
     return html.escape(str(value))
 
 
+# Weapon -> damage die, for the in-combat dice reminder. Looked up by substring
+# against inventory item names; falls back to a generic die if nothing matches.
+WEAPON_DICE = {
+    'greatsword': ('Greatsword', '2d6'),
+    'greataxe': ('Greataxe', '1d12'),
+    'longsword': ('Longsword', '1d8'),
+    'battleaxe': ('Battleaxe', '1d8'),
+    'warhammer': ('Warhammer', '1d8'),
+    'rapier': ('Rapier', '1d8'),
+    'shortsword': ('Shortsword', '1d6'),
+    'handaxe': ('Handaxe', '1d6'),
+    'mace': ('Mace', '1d6'),
+    'spear': ('Spear', '1d6'),
+    'dagger': ('Dagger', '1d4'),
+}
+
+
+def proficiency_bonus(level):
+    try:
+        return 2 + max(0, (int(level) - 1) // 4)
+    except (TypeError, ValueError):
+        return 2
+
+
+def _signed(n):
+    return f'+{n}' if n >= 0 else str(n)
+
+
+def combat_help(state):
+    """A one-line reminder of what to roll for attack + damage, with modifiers."""
+    ch = state.get('character', {})
+    str_mod = (ch.get('modifiers') or {}).get('strength', 0)
+    prof = proficiency_bonus(ch.get('level', 1))
+    atk = str_mod + prof
+
+    die, wname = '1d8', 'weapon'
+    for item in ch.get('inventory') or []:
+        match = next((v for k, v in WEAPON_DICE.items() if k in str(item).lower()), None)
+        if match:
+            wname, die = match
+            break
+
+    return (
+        '<div class="combathelp">'
+        f'<strong>Roll to hit:</strong> 1d20{_signed(atk)} vs AC '
+        f'<span class="dim">(STR {_signed(str_mod)}, prof +{prof})</span>'
+        ' &nbsp;&middot;&nbsp; '
+        f'<strong>Damage:</strong> {die}{_signed(str_mod)} '
+        f'<span class="dim">({wname} + STR)</span>'
+        '</div>'
+    )
+
+
 def living_monsters(node, gs):
     """Monsters in a node still standing per current monster_hp / defeated list."""
     defeated = set(gs.get('defeated_monsters') or [])
@@ -284,6 +337,7 @@ def render_notes(campaign, state):
     node = campaign['nodes'][gs['current_node']]
     exits = node.get('exits', {})
     has_potion = any('potion' in str(i).lower() for i in (ch.get('inventory') or []))
+    in_combat = bool(living_monsters(node, gs))
 
     exit_boxes = ''.join(
         f'<label>&#9744; Go {esc(direction)}</label>'
@@ -305,9 +359,11 @@ def render_notes(campaign, state):
         '<span class="rollfill"></span></div>'
         for lbl in labels
     )
+    combat_html = combat_help(state) if in_combat else ''
     return (
         '<div class="notes"><h3>Your Move</h3>'
         f'<div class="choices">{exit_boxes}{action_boxes}</div>'
+        f'{combat_html}'
         f'<div class="rolls">{roll_boxes}</div>'
         '<div class="pad"></div>'
         '</div>'
@@ -363,6 +419,8 @@ h3 { font-size: 13px; margin: 4px 0; text-transform: uppercase; letter-spacing: 
 .choices { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px;
            margin-bottom: 8px; }
 .choices label { display: inline-block; }
+.combathelp { font-size: 10.5px; margin: 0 0 6px 0; line-height: 1.3; }
+.combathelp .dim { color: #666; }
 .rolls { display: flex; gap: 6px; margin-bottom: 8px; }
 .rollbox { flex: 1; border: 1px solid #000; border-radius: 4px; padding: 3px 4px; }
 .rolllbl { display: block; font-size: 9px; text-transform: uppercase;

@@ -23,8 +23,8 @@
       "y": 1,
       "description": "The rope ends on the masonry floor of a round, roofless tower room. Rubble and old leaves cover the ground. Two giant rats startle from a nest in the debris.",
       "monsters": [
-        { "id": "rat_a", "name": "Giant Rat", "hp": 7, "ac": 12, "attack": "+4 to hit, 1d4+2 piercing" },
-        { "id": "rat_b", "name": "Giant Rat", "hp": 7, "ac": 12, "attack": "+4 to hit, 1d4+2 piercing" }
+        { "id": "rat_a", "name": "Giant Rat", "hp": 7, "ac": 12, "attack": "+4 to hit, 1d4+2 piercing", "dex_mod": 2, "passive_perception": 10 },
+        { "id": "rat_b", "name": "Giant Rat", "hp": 7, "ac": 12, "attack": "+4 to hit, 1d4+2 piercing", "dex_mod": 2, "passive_perception": 10 }
       ],
       "exits": { "north": "dry_fountain", "east": "rat_warren", "west": "goblin_guardpost" }
     },
@@ -42,7 +42,7 @@
       "y": 1,
       "description": "A low side-chamber packed with shredded nesting material. The stink is overwhelming. A lone giant rat guards a glint of metal in the muck.",
       "monsters": [
-        { "id": "rat_c", "name": "Giant Rat", "hp": 7, "ac": 12, "attack": "+4 to hit, 1d4+2 piercing" }
+        { "id": "rat_c", "name": "Giant Rat", "hp": 7, "ac": 12, "attack": "+4 to hit, 1d4+2 piercing", "dex_mod": 2, "passive_perception": 10 }
       ],
       "loot": ["Tarnished silver key"],
       "exits": { "west": "tower_entry" }
@@ -53,7 +53,7 @@
       "y": 1,
       "description": "Crude barricades of broken furniture block half the room. A goblin sentry crouches behind them, scimitar drawn, eyes wide in the gloom.",
       "monsters": [
-        { "id": "goblin_a", "name": "Goblin", "hp": 7, "ac": 15, "attack": "+4 to hit, 1d6+2 slashing (scimitar)" }
+        { "id": "goblin_a", "name": "Goblin", "hp": 7, "ac": 15, "attack": "+4 to hit, 1d6+2 slashing (scimitar)", "dex_mod": 2, "passive_perception": 9 }
       ],
       "exits": { "east": "tower_entry" }
     },
@@ -63,8 +63,8 @@
       "y": 3,
       "description": "The passage opens into an impossible underground grove lit by pale luminescent fungus. A gnarled white tree stands at its centre. Two twig blights skitter from its roots to bar your way.",
       "monsters": [
-        { "id": "blight_a", "name": "Twig Blight", "hp": 4, "ac": 13, "attack": "+3 to hit, 1d4+1 piercing" },
-        { "id": "blight_b", "name": "Twig Blight", "hp": 4, "ac": 13, "attack": "+3 to hit, 1d4+1 piercing" }
+        { "id": "blight_a", "name": "Twig Blight", "hp": 4, "ac": 13, "attack": "+3 to hit, 1d4+1 piercing", "dex_mod": 1, "passive_perception": 8 },
+        { "id": "blight_b", "name": "Twig Blight", "hp": 4, "ac": 13, "attack": "+3 to hit, 1d4+1 piercing", "dex_mod": 1, "passive_perception": 8 }
       ],
       "is_goal": true,
       "exits": { "up": "dry_fountain" }

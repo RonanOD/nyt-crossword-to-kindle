@@ -213,7 +213,7 @@ def render_narrative(campaign, state):
             '<div class="echo">'
             '<strong>Last move, as I read it:</strong> '
             f'{read}{result_html} '
-            '<span class="echo-q">&nbsp;&#9744; &times; misread &mdash; correct in Notes</span>'
+            '<span class="echo-q">&nbsp;&#9744; Misread &mdash; correct in Notes</span>'
             '</div>'
         )
     else:
@@ -372,13 +372,13 @@ def render_notes(campaign, state):
             '<label>&#9744; Roll initiative</label>'
             '<label>&#9744; Search</label>'
             f'{potion_box}'
-            '<label>&#9744; &times; misread last move</label>'
+            '<label>&#9744; Misread last move</label>'
         )
     else:
         action_boxes = (
             '<label>&#9744; Search</label>'
             f'{potion_box}'
-            '<label>&#9744; &times; misread last move</label>'
+            '<label>&#9744; Misread last move</label>'
         )
 
     # Distinct, labelled, single-purpose write-in boxes (the OCR test showed a

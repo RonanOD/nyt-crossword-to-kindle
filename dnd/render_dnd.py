@@ -467,7 +467,13 @@ def render_character_creation(campaign, state):
         f'<div class="abils">{ability_boxes}</div>'
         '<h3>2 &middot; Choose a class</h3>'
         f'<div class="classes">{class_opts}</div>'
-        '<h3>3 &middot; Name your hero</h3>'
+        '<h3>3 &middot; Note your starting HP</h3>'
+        '<p class="ins">HP = your class hit die (<strong>Fighter 10, Rogue 8, '
+        'Barbarian 12</strong>) + your CON modifier. AC is set by your armor. '
+        "We'll confirm both on your character sheet.</p>"
+        '<div class="hpfield">Starting HP: <span class="hpbox"></span>'
+        '&nbsp;&nbsp;AC: <span class="hpbox"></span></div>'
+        '<h3>4 &middot; Name your hero</h3>'
         '<div class="namefield">Name: <span class="nameline"></span></div>'
         '<h3>How play works</h3>'
         '<p class="ins">Ability modifier = (score &minus; 10) &divide; 2, rounded down. '
@@ -580,6 +586,9 @@ h3 { font-size: 13px; margin: 4px 0; text-transform: uppercase; letter-spacing: 
             padding: 5px 7px; margin-bottom: 4px; }
 .namefield { font-size: 13px; margin-bottom: 8px; }
 .nameline { display: inline-block; border-bottom: 1px solid #000; width: 60%; }
+.hpfield { font-size: 13px; margin-bottom: 8px; }
+.hpbox { display: inline-block; border: 1px solid #000; border-radius: 4px;
+         width: 56px; height: 24px; vertical-align: middle; }
 .seep2 { font-size: 10px; color: #888; }
 .dim { color: #666; }
 .sheet { break-before: page; }

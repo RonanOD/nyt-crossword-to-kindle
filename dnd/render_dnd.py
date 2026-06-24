@@ -189,17 +189,14 @@ def render_header(campaign, state):
     hp = f"{ch.get('current_hp', '?')}/{ch.get('max_hp', '?')}"
     ac = esc(ch.get('ac', '?'))
     turn = esc(gs.get('turn_count', 0))
-    inv = ch.get('inventory') or []
-    inv_html = (
-        f'<div class="inv">Carrying: {esc(", ".join(str(i) for i in inv))}</div>'
-        if inv else ''
-    )
+    # Slim at-a-glance line; full detail (inventory, scores, etc.) lives on the
+    # page-2 character sheet.
     return (
         f'<div class="hdr">'
         f'<div class="title">{esc(campaign.get("campaign_name", "Solo Campaign"))}</div>'
         f'<div class="stats">{name} &middot; {klass} {level} &middot; '
-        f'HP {esc(hp)} &middot; AC {ac} &middot; Turn {turn}</div>'
-        f'{inv_html}'
+        f'HP {esc(hp)} &middot; AC {ac} &middot; Turn {turn} '
+        f'<span class="seep2">&mdash; full sheet on p.2</span></div>'
         f'</div>'
     )
 
@@ -482,6 +479,54 @@ def render_character_creation(campaign, state):
     )
 
 
+def render_character_sheet(campaign, state):
+    """Full character sheet, emitted as page 2 of each turn's PDF."""
+    ch = state.get('character', {})
+    gs = state.get('game_state', {})
+    mods = ch.get('modifiers') or {}
+    scores = ch.get('scores') or {}
+    prof = proficiency_bonus(ch.get('level', 1))
+
+    ability_cells = ''.join(
+        f'<div class="abrow"><span class="ab">{rules.ABBR[a]}</span>'
+        f'<span class="absc">{esc(scores.get(a)) if scores.get(a) is not None else "&mdash;"}</span>'
+        f'<span class="abmod">{_signed(mods.get(a, 0))}</span></div>'
+        for a in rules.ABILITIES
+    )
+    atk_ability = ch.get('attack_ability', 'strength')
+    atk = mods.get(atk_ability, 0) + prof
+    die = ch.get('damage_die', '1d8')
+    inv = ', '.join(str(i) for i in (ch.get('inventory') or [])) or '&mdash;'
+    skills = ', '.join(ch.get('skill_proficiencies') or []) or 'none'
+    loc = campaign['nodes'].get(gs.get('current_node', ''), {}).get('title', '&mdash;')
+
+    return (
+        '<div class="sheet">'
+        '<div class="hdr"><div class="title">Character Sheet</div></div>'
+        f'<div class="csline"><strong>{esc(ch.get("name", "Hero"))}</strong> &middot; '
+        f'{esc(ch.get("class", ""))} &middot; Level {esc(ch.get("level", 1))}</div>'
+        f'<div class="csline">HP <strong>{esc(ch.get("current_hp", "?"))}</strong>'
+        f'/{esc(ch.get("max_hp", "?"))} &middot; AC <strong>{esc(ch.get("ac", "?"))}</strong> '
+        f'&middot; Proficiency +{prof}</div>'
+        '<h3>Abilities</h3>'
+        f'<div class="abtable">{ability_cells}</div>'
+        '<h3>Attack</h3>'
+        f'<div class="csline">{esc(ch.get("weapon", "Weapon"))}: '
+        f'<strong>1d20{_signed(atk)}</strong> to hit vs AC &middot; '
+        f'<strong>{die}{_signed(mods.get(atk_ability, 0))}</strong> damage '
+        f'<span class="dim">({rules.ABBR.get(atk_ability, "STR")}-based)</span></div>'
+        '<h3>Equipment</h3>'
+        f'<div class="csline">{esc(inv)}</div>'
+        '<h3>Skill proficiencies</h3>'
+        f'<div class="csline">{esc(skills)}</div>'
+        '<h3>Location</h3>'
+        f'<div class="csline">{esc(loc)}</div>'
+        '<p class="ins">To hit = d20 + ability mod + proficiency. '
+        'Damage = weapon die + ability mod. A Health Potion heals 2d4+2.</p>'
+        '</div>'
+    )
+
+
 CSS = """
 @page { size: 156mm 208mm; margin: 9mm; }
 * { box-sizing: border-box; }
@@ -535,6 +580,15 @@ h3 { font-size: 13px; margin: 4px 0; text-transform: uppercase; letter-spacing: 
             padding: 5px 7px; margin-bottom: 4px; }
 .namefield { font-size: 13px; margin-bottom: 8px; }
 .nameline { display: inline-block; border-bottom: 1px solid #000; width: 60%; }
+.seep2 { font-size: 10px; color: #888; }
+.dim { color: #666; }
+.sheet { break-before: page; }
+.csline { font-size: 13px; margin: 3px 0; }
+.abtable { display: flex; gap: 6px; margin: 4px 0 2px; }
+.abrow { flex: 1; border: 1px solid #000; border-radius: 4px; text-align: center; padding: 3px; }
+.ab { display: block; font-size: 10px; font-weight: 700; letter-spacing: 1px; }
+.absc { display: block; font-size: 18px; font-weight: 700; }
+.abmod { display: block; font-size: 11px; color: #444; }
 """
 
 
@@ -578,6 +632,7 @@ def main():
         '<!DOCTYPE html><html><head><meta charset="utf-8">'
         f'<style>{CSS}</style></head><body>'
         f'{top}{lower}'
+        f'{render_character_sheet(campaign, state)}'
         '</body></html>'
     )
 

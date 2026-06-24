@@ -56,15 +56,25 @@ function advance_game() {
         deactivate; return
     fi
 
-    local att msgid move_file
+    local att msgid move_file game_status char_flag
     att=$(echo "${ingest_json}" | jq -r '.attachment_path')
     msgid=$(echo "${ingest_json}" | jq -r '.message_id')
     move_file=$(mktemp /crosswords/tmp/dnd-move-XXXXXX.json)
 
-    echo "Interpreting reply ${msgid} ..."
-    if python3 "${DND_PATH}/process_vision.py" "${att}" > "${move_file}"; then
-        echo "Applying move to campaign state ..."
-        if python3 "${DND_PATH}/engine.py" "${move_file}" --message-id "${msgid}"; then
+    # On a fresh campaign or after death, the inbound page is a character sheet,
+    # not a move — parse and apply it in --character mode.
+    game_status=$(jq -r '.game_state.status // "active"' "${DND_PATH}/state.json")
+    char_flag=""
+    if [ "${game_status}" = "awaiting_character" ] || [ "${game_status}" = "dead" ]; then
+        char_flag="--character"
+        echo "Interpreting reply ${msgid} as a character sheet ..."
+    else
+        echo "Interpreting reply ${msgid} as a move ..."
+    fi
+
+    if python3 "${DND_PATH}/process_vision.py" "${att}" ${char_flag} > "${move_file}"; then
+        echo "Applying to campaign state ..."
+        if python3 "${DND_PATH}/engine.py" "${move_file}" ${char_flag} --message-id "${msgid}"; then
             MOVE_APPLIED=true  # global: tells --poll mode a page is worth sending
         else
             echo "Engine failed; state unchanged."

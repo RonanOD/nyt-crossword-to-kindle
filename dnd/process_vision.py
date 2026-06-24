@@ -61,6 +61,25 @@ PROMPT = (
     '}'
 )
 
+CHAR_SYSTEM = (
+    'You are reading a hand-filled tabletop RPG character sheet. Extract ONLY '
+    'what is written or ticked. Ability scores are integers, typically 3-18. '
+    'Exactly one class checkbox should be ticked. Report exactly what you see; '
+    'if a field is blank or unreadable, use null and lower your confidence.'
+)
+
+CHAR_PROMPT = (
+    'Read this character sheet. Respond with JSON only, matching this shape:\n'
+    '{\n'
+    '  "name": <the hero name written on the Name line, or null>,\n'
+    '  "class": "fighter"|"rogue"|"barbarian"|null (which ONE class box is ticked),\n'
+    '  "scores": {"strength": <int>, "dexterity": <int>, "constitution": <int>, '
+    '"intelligence": <int>, "wisdom": <int>, "charisma": <int>} '
+    '(the number written in each labelled ability box; null if blank),\n'
+    '  "confidence": "high"|"medium"|"low"\n'
+    '}'
+)
+
 
 def load_part(path, client_types):
     ext = os.path.splitext(path)[1].lower()
@@ -84,10 +103,13 @@ def parse_json(text):
 
 def main():
     load_dotenv()
-    if len(sys.argv) < 2:
-        print('Usage: python process_vision.py <path>', file=sys.stderr)
+    args = sys.argv[1:]
+    character_mode = '--character' in args
+    paths = [a for a in args if not a.startswith('--')]
+    if not paths:
+        print('Usage: python process_vision.py <path> [--character]', file=sys.stderr)
         sys.exit(1)
-    path = sys.argv[1]
+    path = paths[0]
     if not os.path.isfile(path):
         print(f'File not found: {path}', file=sys.stderr)
         sys.exit(1)
@@ -104,18 +126,19 @@ def main():
     client = genai.Client(api_key=api_key)
     part = load_part(path, types)
 
+    prompt = CHAR_PROMPT if character_mode else PROMPT
+    system = CHAR_SYSTEM if character_mode else SYSTEM_INSTRUCTION
     resp = client.models.generate_content(
         model=model,
-        contents=[PROMPT, part],
+        contents=[prompt, part],
         config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_INSTRUCTION,
+            system_instruction=system,
             response_mime_type='application/json',
             temperature=0,
         ),
     )
 
-    move = parse_json(resp.text)
-    print(json.dumps(move, indent=2))
+    print(json.dumps(parse_json(resp.text), indent=2))
 
 
 if __name__ == '__main__':

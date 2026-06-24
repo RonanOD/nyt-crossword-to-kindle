@@ -22,6 +22,8 @@ import os
 import re
 import sys
 
+import rules  # shared class profiles / 5e derivation (same dir)
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -260,15 +262,55 @@ def apply_move(state, campaign, move, message_id):
     return events
 
 
+def apply_character_sheet(state, campaign, sheet, message_id):
+    """Build a fresh hero from a filled creation sheet and (re)start the
+    campaign at the first room. Used on a new campaign or after death."""
+    ch = rules.derive_character(
+        sheet.get('name'), sheet.get('class'), sheet.get('scores') or {})
+    state['character'] = ch
+
+    start = campaign.get('start_node') or next(iter(campaign['nodes']))
+    state['game_state'] = {
+        'current_node': start,
+        'discovered_nodes': [start],
+        'defeated_monsters': [],
+        'monster_hp': {},
+        'searched_nodes': [],
+        'combat': {'node': None, 'player_first': None},
+        'status': 'active',
+        'turn_count': 0,
+    }
+    intro = (f'{ch["name"]} the {ch["class"]} (HP {ch["max_hp"]}, AC {ch["ac"]}) '
+             'descends into the Sunken Vault.')
+    ing = state.setdefault('ingestion', {})
+    ing['last_processed_message_id'] = message_id
+    ing['awaiting_reply'] = False
+    ing['turn_log'] = [{
+        'turn': 0,
+        'read': f'New hero: {ch["name"]} the {ch["class"]}.',
+        'result': intro,
+        'confidence': sheet.get('confidence'),
+        'misread_flag': False,
+    }]
+    return [intro]
+
+
 def main():
     argv = sys.argv[1:]
     if not argv:
-        print('Usage: python engine.py <move.json> [--message-id <id>]', file=sys.stderr)
+        print('Usage: python engine.py <move.json> [--character] [--message-id <id>]',
+              file=sys.stderr)
         sys.exit(1)
-    move_path = argv[0]
+    character_mode = '--character' in argv
     message_id = None
     if '--message-id' in argv:
         message_id = argv[argv.index('--message-id') + 1]
+    paths = [a for a in argv if not a.startswith('--') and a != message_id]
+    if not paths:
+        print('Usage: python engine.py <move.json> [--character] [--message-id <id>]',
+              file=sys.stderr)
+        sys.exit(1)
+    move_path = paths[0]
 
     move = load(move_path)
     if message_id is None:
@@ -279,7 +321,10 @@ def main():
     campaign = load(campaign_path)
     state = load(state_path)
 
-    events = apply_move(state, campaign, move, message_id)
+    if character_mode:
+        events = apply_character_sheet(state, campaign, move, message_id)
+    else:
+        events = apply_move(state, campaign, move, message_id)
 
     with open(state_path, 'w', encoding='utf-8') as f:
         json.dump(state, f, indent=2)

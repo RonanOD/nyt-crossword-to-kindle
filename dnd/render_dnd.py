@@ -20,6 +20,8 @@ import json
 import os
 import sys
 
+import rules  # shared class profiles / 5e derivation (same dir)
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CELL = 90          # map grid cell size (px in the SVG viewBox)
 GAP = 34           # gap between cells
@@ -82,17 +84,24 @@ def combat_help(state, living):
     """Per-action dice/DC reminder shown during a fight, with modifiers."""
     ch = state.get('character', {})
     mods = ch.get('modifiers') or {}
-    str_mod = mods.get('strength', 0)
     dex_mod = mods.get('dexterity', 0)
     prof = proficiency_bonus(ch.get('level', 1))
-    atk = str_mod + prof
 
-    die = '1d8'
-    for item in ch.get('inventory') or []:
-        match = next((v for k, v in WEAPON_DICE.items() if k in str(item).lower()), None)
-        if match:
-            die = match[1]
-            break
+    # Attack uses the class's attack ability (Rogue = DEX) and weapon die when
+    # set by character creation; fall back to STR + inventory weapon otherwise.
+    atk_ability = ch.get('attack_ability', 'strength')
+    atk_mod = mods.get(atk_ability, 0)
+    atk = atk_mod + prof
+    atk_abbr = rules.ABBR.get(atk_ability, 'STR')
+
+    die = ch.get('damage_die')
+    if not die:
+        die = '1d8'
+        for item in ch.get('inventory') or []:
+            match = next((v for k, v in WEAPON_DICE.items() if k in str(item).lower()), None)
+            if match:
+                die = match[1]
+                break
 
     stealth_b = dex_mod
     if 'stealth' in [str(s).lower() for s in (ch.get('skill_proficiencies') or [])]:
@@ -102,8 +111,8 @@ def combat_help(state, living):
 
     rows = [
         f'<div><strong>Attack:</strong> 1d20{_signed(atk)} vs AC '
-        f'<span class="dim">(STR {_signed(str_mod)}, prof +{prof})</span> &middot; '
-        f'dmg {die}{_signed(str_mod)}</div>',
+        f'<span class="dim">({atk_abbr} {_signed(atk_mod)}, prof +{prof})</span> &middot; '
+        f'dmg {die}{_signed(atk_mod)}</div>',
         f'<div><strong>Sneak past:</strong> Stealth 1d20{_signed(stealth_b)} '
         f'vs passive Perception {perc_dc} <span class="dim">(+ tick an exit)</span></div>',
         '<div><strong>Dodge:</strong> enemy attacks at disadvantage '
@@ -427,6 +436,52 @@ def render_terminal(campaign, state):
     )
 
 
+def render_character_creation(campaign, state):
+    """Single page: roll-up a new hero (shown on a fresh campaign or after death)."""
+    gs = state.get('game_state', {})
+    ch = state.get('character', {})
+    if gs.get('status') == 'dead':
+        where = campaign['nodes'].get(gs.get('current_node', ''), {}).get('title', 'the depths')
+        banner = f'{esc(ch.get("name", "Your hero"))} Has Fallen'
+        sub = (f'Slain at {esc(where)} on turn {esc(gs.get("turn_count", 0))}. '
+               'Roll a new champion to descend again.')
+    else:
+        banner = 'Create Your Hero'
+        sub = 'Roll up a champion to descend into the Sunken Vault.'
+
+    ability_boxes = ''.join(
+        f'<div class="abilbox"><span class="abillbl">{rules.ABBR[a]}</span>'
+        '<span class="abilfill"></span></div>'
+        for a in rules.ABILITIES
+    )
+    class_opts = ''.join(
+        f'<div class="classopt">&#9744; <strong>{k.capitalize()}</strong> &mdash; '
+        f'{esc(p["blurb"])}</div>'
+        for k, p in rules.CLASS_PROFILES.items()
+    )
+    return (
+        '<div class="hdr"><div class="title">'
+        f'{esc(campaign.get("campaign_name", "Solo Campaign"))}</div></div>'
+        '<div class="create">'
+        f'<h2>{banner}</h2><p class="csub">{sub}</p>'
+        '<h3>1 &middot; Roll your abilities</h3>'
+        '<p class="ins">Roll <strong>4d6, drop the lowest die</strong>, six times. '
+        'Write each total in a box (assign them however you like &mdash; higher is better):</p>'
+        f'<div class="abils">{ability_boxes}</div>'
+        '<h3>2 &middot; Choose a class</h3>'
+        f'<div class="classes">{class_opts}</div>'
+        '<h3>3 &middot; Name your hero</h3>'
+        '<div class="namefield">Name: <span class="nameline"></span></div>'
+        '<h3>How play works</h3>'
+        '<p class="ins">Ability modifier = (score &minus; 10) &divide; 2, rounded down. '
+        'In a fight you roll <strong>d20 + ability mod + proficiency (+2)</strong> to hit '
+        "vs the foe's AC, and <strong>weapon die + ability mod</strong> for damage. "
+        'Everyone starts with a <strong>Health Potion</strong> (heals 2d4+2). Your HP, AC '
+        'and gear come from your class and CON. <strong>Email this page back to begin.</strong></p>'
+        '</div>'
+    )
+
+
 CSS = """
 @page { size: 156mm 208mm; margin: 9mm; }
 * { box-sizing: border-box; }
@@ -469,6 +524,17 @@ h3 { font-size: 13px; margin: 4px 0; text-transform: uppercase; letter-spacing: 
 .banner { font-size: 40px; font-weight: 700; letter-spacing: 2px; }
 .term .sub { font-size: 15px; margin-top: 8px; }
 .termline { font-size: 13px; color: #333; margin: 14px 0 0 0; }
+.create h2 { font-size: 20px; margin: 6px 0 2px; }
+.create .csub { font-size: 12px; color: #444; margin: 0 0 8px; }
+.create .ins { font-size: 12px; line-height: 1.35; margin: 2px 0 8px; }
+.abils { display: flex; gap: 8px; margin-bottom: 6px; }
+.abilbox { flex: 1; border: 1px solid #000; border-radius: 5px; padding: 4px; text-align: center; }
+.abillbl { display: block; font-size: 11px; font-weight: 700; letter-spacing: 1px; }
+.abilfill { display: block; height: 34px; }
+.classopt { font-size: 12px; border: 1px solid #aaa; border-radius: 4px;
+            padding: 5px 7px; margin-bottom: 4px; }
+.namefield { font-size: 13px; margin-bottom: 8px; }
+.nameline { display: inline-block; border-bottom: 1px solid #000; width: 60%; }
 """
 
 
@@ -476,7 +542,18 @@ def main():
     campaign = load_json('campaign.json', 'DND_CAMPAIGN_FILE')
     state = load_json('state.json', 'DND_STATE_FILE')
 
-    if state.get('game_state', {}).get('status') in ('won', 'dead'):
+    status = state.get('game_state', {}).get('status')
+
+    # A fresh campaign or a death sends the character-creation sheet to fill out.
+    if status in ('awaiting_character', 'dead'):
+        body = render_character_creation(campaign, state)
+        print(
+            '<!DOCTYPE html><html><head><meta charset="utf-8">'
+            f'<style>{CSS}</style></head><body>{body}</body></html>'
+        )
+        return
+
+    if status == 'won':
         body = render_header(campaign, state) + render_terminal(campaign, state)
         print(
             '<!DOCTYPE html><html><head><meta charset="utf-8">'
